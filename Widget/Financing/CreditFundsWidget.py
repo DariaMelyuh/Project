@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QHeaderView ,QPushButton
 )
 
-class FinancingWidget(QFrame):
+class CreditFundsWidget(QFrame):
     def __init__(self, input_widget):
         super().__init__()
         self.input_widget = input_widget

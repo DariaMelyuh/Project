@@ -224,14 +224,14 @@ class WACCWidget(QFrame):
             return
 
         # ПРОВЕРКА 2: Созданы ли остальные зависимости
-        needed = ['funding_widget', 'fin_widget', 'taxes_widget', 'capm_widget']
+        needed = ['funding_widget', 'credit_widget', 'taxes_widget', 'capm_widget']
         if not all(hasattr(self.main_window, w) for w in needed):
             return
 
         try:
             struct = self.main_window.funding_widget.get_funding_data()
             total_funding = float(struct.get("total", 0))
-            fund_data = self.main_window.fin_widget.get_financing_totals()
+            fund_data = self.main_window.credit_widget.get_financing_totals()
             rd_val = float(fund_data.get("loan_rate", 0.0))
 
             for year in self.years:

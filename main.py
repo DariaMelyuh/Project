@@ -11,7 +11,7 @@ from Widget.MacroParameters.InflationWidget import InflationWidget
 from Widget.MacroParameters.SeasonalityWidget import SeasonalityWidget
 from Widget.MacroParameters.ScenarioWidget import ScenarioWidget
 from Widget.MacroParameters.ScenarioSelectorWidget import ScenarioSelectorWidget
-from Widget.Financing.FinancingWidget import FinancingWidget
+from Widget.Financing.CreditFundsWidget import CreditFundsWidget
 from Widget.Financing.FundingStructureWidget import FundingStructureWidget
 from Widget.DiscountRate.CAPMWidget import CAPMWidget
 from Widget.DiscountRate.WACCWidget import WACCWidget
@@ -134,8 +134,8 @@ class MainWindow(QWidget):
         self.efficiency_widget = EfficiencyMetricsWidget()
         self.capm_widget = CAPMWidget(main_window=self)
         self.wacc_widget = WACCWidget(main_window=self)
-        self.fin_widget = FinancingWidget(self.input_widget)
-        self.funding_widget = FundingStructureWidget(self.fin_widget)
+        self.credit_widget = CreditFundsWidget(self.input_widget)
+        self.funding_widget = FundingStructureWidget(self.credit_widget)
         self.revenue_params = RevenueParametersWidget()
         self.sales_capacity = SalesCapacityWidget()
         self.capex_params = CapitalExpenditureWidget()
@@ -218,7 +218,7 @@ class MainWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
 
         # Убрали выравнивание AlignLeft, теперь виджеты растягиваются по ширине слоя
-        layout.addWidget(self.fin_widget)
+        layout.addWidget(self.credit_widget)
         layout.addWidget(self.funding_widget)
 
         layout.addStretch()
@@ -367,11 +367,11 @@ class MainWindow(QWidget):
             le.editingFinished.connect(self.update_wacc_values)
         for key in ['equity', 'investments']:
             self.funding_widget.inputs[key].editingFinished.connect(self.sync_yearly_table)
-        self.fin_widget.inputs["amount"].editingFinished.connect(self.sync_yearly_table)
-        self.fin_widget.inputs["rate"].editingFinished.connect(self.sync_yearly_table)
-        self.fin_widget.inputs["term"].editingFinished.connect(self.sync_yearly_table)
-        if hasattr(self.fin_widget, 'rate_le'):
-            self.fin_widget.rate_le.editingFinished.connect(self.update_wacc_values)
+        self.credit_widget.inputs["amount"].editingFinished.connect(self.sync_yearly_table)
+        self.credit_widget.inputs["rate"].editingFinished.connect(self.sync_yearly_table)
+        self.credit_widget.inputs["term"].editingFinished.connect(self.sync_yearly_table)
+        if hasattr(self.credit_widget, 'rate_le'):
+            self.credit_widget.rate_le.editingFinished.connect(self.update_wacc_values)
         # for le in self.taxes_widget.inputs.values():
         #     le.editingFinished.connect(self.update_wacc_values)
         # ЭТО ДОБАВИТЬ
@@ -407,7 +407,7 @@ class MainWindow(QWidget):
             self.refresh_capm_columns()
             self.refresh_macro_columns()
             self.refresh_sales_capacity_columns()
-            self.fin_widget.calculate_loan()
+            self.credit_widget.calculate_loan()
         finally:
             self.blockSignals(False)
             # Вызываем расчет ОДИН раз после всех обновлений
@@ -472,13 +472,13 @@ class MainWindow(QWidget):
     def _get_loan_body_schedule(self):
         schedule = {}
         try:
-            loan_amount = float(self.fin_widget.inputs["amount"].text().replace(' ', '').replace(',', '.'))
-            loan_rate = float(self.fin_widget.inputs["rate"].text().replace(',', '.'))
-            loan_term = int(self.fin_widget.inputs["term"].text())
+            loan_amount = float(self.credit_widget.inputs["amount"].text().replace(' ', '').replace(',', '.'))
+            loan_rate = float(self.credit_widget.inputs["rate"].text().replace(',', '.'))
+            loan_term = int(self.credit_widget.inputs["term"].text())
             monthly_rate = (loan_rate / 100) / 12
 
             for month in range(1, loan_term + 1):
-                principal = abs(self.fin_widget.numpy_equivalent_ppmt(monthly_rate, month, loan_term, loan_amount))
+                principal = abs(self.credit_widget.numpy_equivalent_ppmt(monthly_rate, month, loan_term, loan_amount))
                 schedule[month] = principal
         except:
             pass
@@ -491,7 +491,7 @@ class MainWindow(QWidget):
         m_rev = [0.0] * total_months
         m_opex = [0.0] * total_months
         m_amort = [0.0] * total_months
-        m_interest = [self.fin_widget.get_interest_schedule().get(m, 0.0) for m in range(1, total_months + 1)]
+        m_interest = [self.credit_widget.get_interest_schedule().get(m, 0.0) for m in range(1, total_months + 1)]
         m_capex = [0.0] * total_months
         m_asset_sales = [0.0] * total_months
         m_net_profit = [0.0] * total_months
@@ -612,7 +612,7 @@ class MainWindow(QWidget):
                 start_month=start_month,
                 sales_capacity_data=self.sales_capacity.get_data(),
                 capex_data=self.capex_params.get_capex_full_data(),
-                loan_schedule=self.fin_widget.get_interest_schedule(),
+                loan_schedule=self.credit_widget.get_interest_schedule(),
                 tax_rates_map=self.taxes_widget.get_tax_rates_by_year()
             )
 
@@ -669,7 +669,7 @@ class MainWindow(QWidget):
                     net_profit_monthly=monthly_cf['net_profit'],
                     op_cf_monthly=monthly_cf['op_cf'],
                     inv_cf_monthly=monthly_cf['inv_cf'],
-                    interest_schedule=self.fin_widget.get_interest_schedule(),
+                    interest_schedule=self.credit_widget.get_interest_schedule(),
                     body_schedule=self._get_loan_body_schedule(),
                 )
 
@@ -680,7 +680,7 @@ class MainWindow(QWidget):
                     inv_cf_monthly=monthly_cf['inv_cf'],
                     funding_data=self.funding_widget.get_funding_data(),
                     net_profit_monthly=monthly_cf['net_profit'],
-                    interest_schedule=self.fin_widget.get_interest_schedule(),
+                    interest_schedule=self.credit_widget.get_interest_schedule(),
                     body_schedule=self._get_loan_body_schedule(),
                     monthly_rate_widget=self.monthly_rate_widget
                 )

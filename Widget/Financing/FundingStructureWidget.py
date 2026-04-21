@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 class FundingStructureWidget(QFrame):
     def __init__(self, financing_widget):
         super().__init__()
-        self.fin_widget = financing_widget
+        self.credit_widget = financing_widget
         self.inputs = {}
         self.shares = {}
 
@@ -140,7 +140,7 @@ class FundingStructureWidget(QFrame):
             layout.addLayout(row_layout)
 
         # Конец инициализации (синхронизация и расчеты)
-        self.fin_widget.inputs["amount"].textChanged.connect(self.sync_loan_amount)
+        self.credit_widget.inputs["amount"].textChanged.connect(self.sync_loan_amount)
         self.sync_loan_amount()
         self.calculate_totals()
 
@@ -182,7 +182,7 @@ class FundingStructureWidget(QFrame):
 
     def sync_loan_amount(self):
         # Берем текст напрямую из нового поля ввода
-        val_text = self.clean_val(self.fin_widget.inputs["amount"].text())
+        val_text = self.clean_val(self.credit_widget.inputs["amount"].text())
         try:
             val = float(val_text) if val_text else 0.0
             self.inputs["loan"].setText(self.format_money(val))
