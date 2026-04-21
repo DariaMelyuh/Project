@@ -381,7 +381,7 @@ class MainWindow(QWidget):
             if hasattr(self.capm_widget, attr):
                 getattr(self.capm_widget, attr).editingFinished.connect(self.update_wacc_values)
 
-        # Прочее asdasdasd
+        # Прочее
         self.income_selector.combo.currentTextChanged.connect(self.update_model_from_scenarios)
         self.expense_selector.combo.currentTextChanged.connect(self.update_model_from_scenarios)
         self.revenue_params.apply_btn.clicked.connect(self.sync_yearly_table)
