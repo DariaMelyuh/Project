@@ -15,6 +15,7 @@ from Widget.Financing.CreditFundsWidget import CreditFundsWidget
 from Widget.Financing.FundingStructureWidget import FundingStructureWidget
 from Widget.DiscountRate.CAPMWidget import CAPMWidget
 from Widget.DiscountRate.WACCWidget import WACCWidget
+from Widget.SalesAndExpenses.PriceGrowthWidget import PriceGrowthWidget
 from Widget.SalesAndExpenses.RevenueParametersWidget import RevenueParametersWidget
 from Widget.SalesAndExpenses.CapitalExpenditureWidget import CapitalExpenditureWidget
 from Widget.SalesAndExpenses.OperatingExpensesWidget import OperatingExpensesWidget
@@ -28,6 +29,9 @@ from Widget.DiscountRate.MonthlyDiscountRateWidget import MonthlyDiscountRateWid
 from Widget.CashFlow.AccumulatedCashFlowWidget import AccumulatedCashFlowWidget
 from Widget.EvaluationOfEffectiveness.EfficiencyMetricsWidget import EfficiencyMetricsWidget
 from Widget.SalesAndExpenses.AssetSalesWidget import AssetSalesWidget
+from Widget.SalesAndExpenses.VolumeGrowthWidget import VolumeGrowthWidget
+
+
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -138,6 +142,8 @@ class MainWindow(QWidget):
         self.funding_widget = FundingStructureWidget(self.credit_widget)
         self.revenue_params = RevenueParametersWidget()
         self.sales_capacity = SalesCapacityWidget()
+        self.volume_growth = VolumeGrowthWidget()
+        self.price_growth = PriceGrowthWidget()
         self.capex_params = CapitalExpenditureWidget()
         self.monthly_rate_widget = MonthlyDiscountRateWidget(self.wacc_widget)
         self.opex_widget = OperatingExpensesWidget()
@@ -223,25 +229,51 @@ class MainWindow(QWidget):
 
         layout.addStretch()
         self.tabs.addTab(scroll, "3. Финансирование")
+
     def create_tab_sales_costs(self):
-        """Вкладка 4: Выручка и Затраты (без селекторов)"""
+        """Вкладка 4: Выручка и Затраты (Таблицы роста в одну строку)"""
         scroll, container = self.get_scroll_wrapper()
+        # Отключаем горизонтальный скролл на самой вкладке
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.apply_custom_scroll_style(scroll)
+
         layout = QVBoxLayout(container)
         layout.setSpacing(25)
         layout.setContentsMargins(15, 20, 20, 20)
+
+        # 1. Основные параметры выручки
         layout.addWidget(self.revenue_params)
+
+        # --- НОВЫЙ БЛОК: Темпы роста в одну строку ---
+        growth_row = QHBoxLayout()
+        growth_row.setSpacing(10)  # Отступ между таблицами
+
+        # Немного уменьшаем ширину каждого виджета (было 400, ставим 385 или 390)
+        # Это предотвратит появление горизонтальной полосы прокрутки
+        self.volume_growth.setFixedWidth(735)
+        self.price_growth.setFixedWidth(735)
+
+        growth_row.addWidget(self.volume_growth, alignment=Qt.AlignmentFlag.AlignLeft)
+        growth_row.addWidget(self.price_growth, alignment=Qt.AlignmentFlag.AlignLeft)
+        growth_row.addStretch()  # Чтобы они прижимались влево, если экран очень широкий
+
+        layout.addLayout(growth_row)
+        # --------------------------------------------
+
+        # 2. Параметры мощности
         layout.addWidget(self.sales_capacity)
-        # Ряд затрат
+
+        # 3. Ряд затрат (CAPEX и OPEX)
         costs_row = QHBoxLayout()
         costs_row.setSpacing(10)
         costs_row.addWidget(self.capex_params, alignment=Qt.AlignmentFlag.AlignTop)
         costs_row.addWidget(self.opex_widget, alignment=Qt.AlignmentFlag.AlignTop)
         costs_row.addStretch()
         layout.addLayout(costs_row)
-        # Таблица продажи активов
+
+        # 4. Таблица продажи активов
         layout.addWidget(self.asset_sales_widget)
+
         layout.addStretch()
         self.tabs.addTab(scroll, "4. Продажи и затраты")
     def create_tab_results(self):
@@ -385,6 +417,9 @@ class MainWindow(QWidget):
         self.income_selector.combo.currentTextChanged.connect(self.update_model_from_scenarios)
         self.expense_selector.combo.currentTextChanged.connect(self.update_model_from_scenarios)
         self.revenue_params.apply_btn.clicked.connect(self.sync_yearly_table)
+        # Чтобы названия товаров передавались в новую таблицу
+        self.revenue_params.products_changed.connect(self.volume_growth.update_product_names)
+        self.revenue_params.products_changed.connect(self.price_growth.update_product_names)
         self.revenue_params.products_changed.connect(self.sales_capacity.update_product_names)
         for le in self.seasonality_widget.inputs:
             le.editingFinished.connect(self.sync_yearly_table)
@@ -407,6 +442,8 @@ class MainWindow(QWidget):
             self.refresh_capm_columns()
             self.refresh_macro_columns()
             self.refresh_sales_capacity_columns()
+            self.refresh_volume_growth_columns()
+            self.refresh_price_growth_columns()
             self.credit_widget.calculate_loan()
         finally:
             self.blockSignals(False)
@@ -443,6 +480,29 @@ class MainWindow(QWidget):
         except:
             pass
 
+    def refresh_volume_growth_columns(self):
+        try:
+            # Передаем напрямую 60 (или сколько введено в поле горизонта)
+            horizon = self.input_widget.hor_le.text() or "12"
+            self.volume_growth.update_years(
+                self.input_widget.year_cb.currentText(),
+                self.input_widget.month_cb.currentIndex(),
+                horizon
+            )
+        except Exception as e:
+            print(f"Ошибка обновления лет объема: {e}")
+
+    def refresh_price_growth_columns(self):
+        try:
+            # Аналогично для цены
+            horizon = self.input_widget.hor_le.text() or "12"
+            self.price_growth.update_years(
+                self.input_widget.year_cb.currentText(),
+                self.input_widget.month_cb.currentIndex(),
+                horizon
+            )
+        except Exception as e:
+            print(f"Ошибка обновления лет цены: {e}")
     def refresh_capm_columns(self):
         try:
             y, m = self.input_widget.year_cb.currentText(), self.input_widget.month_cb.currentIndex()
@@ -504,6 +564,8 @@ class MainWindow(QWidget):
         base_opex = self.opex_widget.get_base_opex()
         seasonal_factors = self.seasonality_widget.get_factors()
         sales_capacity_data = self.sales_capacity.get_data()
+        volume_growth_data = self.volume_growth.get_data()
+        price_growth_data = self.price_growth.get_data()
         capex_data = self.capex_params.get_capex_full_data()
         tax_rates_map = self.taxes_widget.get_tax_rates_by_year()
         vat_map = self.taxes_widget.get_vat_rates_by_year()
@@ -543,13 +605,22 @@ class MainWindow(QWidget):
             num_prods = len(products_data)
             cap_ks = raw_cap + [1.0] * (num_prods - len(raw_cap))
 
+            raw_v_growth = volume_growth_data.get(year_str, [])
+            # Заполняем нулями, если для какого-то продукта данные не введены
+            v_growth_ks = raw_v_growth + [0.0] * (num_prods - len(raw_v_growth))
+
+            raw_p_growth = price_growth_data.get(year_str, [])
+            p_growth_ks = raw_p_growth + [0.0] * (num_prods - len(raw_p_growth))
+
             for _ in range(months_per_year[year]):
                 seasonal_k = seasonal_factors[(curr_m_idx - 1) % len(seasonal_factors)]
                 revenue = 0.0
 
                 for p_idx, prod in enumerate(products_data):
-                    v_growth = (prod['v_growth'] / 100) / 12
-                    p_growth = (prod['p_growth'] / 100) / 12
+                    v_growth = (v_growth_ks[p_idx] / 100) / 12
+
+                    p_growth = (p_growth_ks[p_idx] / 100) / 12
+
                     volume = prod['base_vol'] * (1 + v_growth) ** abs_m * cap_ks[p_idx] * seasonal_k
                     price = prod['base_price'] * (1 + p_growth) ** abs_m
                     revenue += volume * price

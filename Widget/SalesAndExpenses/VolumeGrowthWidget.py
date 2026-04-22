@@ -1,23 +1,14 @@
 import sys
-import math
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont, QRegularExpressionValidator, QColor, QBrush
-from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QComboBox, QLineEdit, QScrollArea, QFrame, QGridLayout,
-    QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView,
-QSizePolicy
-)
-from PyQt6.QtGui import QFont, QRegularExpressionValidator, QIntValidator
 from PyQt6.QtCore import Qt, QRegularExpression
+from PyQt6.QtGui import QFont, QRegularExpressionValidator
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QFrame, QLabel,
-    QAbstractItemView, QHeaderView ,QPushButton
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QLineEdit, QScrollArea, QFrame, QGridLayout,
+    QMessageBox, QPushButton
 )
 
 
-class SalesCapacityWidget(QFrame):
+class VolumeGrowthWidget(QFrame):
     def __init__(self):
         super().__init__()
         # 1. Настройка шрифтов
@@ -32,23 +23,22 @@ class SalesCapacityWidget(QFrame):
         self.years = ["2026"]
         self.inputs = {}
 
-        # Общий валидатор для чисел
+        # Общий валидатор (разрешает ввод цифр, точек и запятых)
         self.num_validator = QRegularExpressionValidator(QRegularExpression(r"^\d*[.,]?\d*$"))
 
-        # 2. Стиль контейнера
+        # Стиль контейнера
         self.setStyleSheet(
-            "QFrame#CapacityContainer { background-color: white; border: 1px solid #D0E6F5; border-radius: 15px; }")
-        self.setObjectName("CapacityContainer")
-        self.setFixedWidth(735)
-        self.setFixedHeight(400)  # Увеличено, чтобы влезла панель
+            "QFrame#GrowthContainer { background-color: white; border: 1px solid #D0E6F5; border-radius: 15px; }")
+        self.setObjectName("GrowthContainer")
+        self.setFixedWidth(800)
+        self.setFixedHeight(400)  # Увеличили высоту под панель
 
-        # Основной лейаут
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(20, 15, 20, 20)
         self.main_layout.setSpacing(10)
 
         # Заголовок
-        title = QLabel("Коэффициент мощности продаж, %")
+        title = QLabel("Годовой темп роста объема продаж, %")
         title.setFont(self.title_font)
         title.setStyleSheet("background-color: transparent; border: none; color: #333333;")
         self.main_layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -56,11 +46,11 @@ class SalesCapacityWidget(QFrame):
         # --- НОВАЯ ПАНЕЛЬ МАССОВОГО ЗАПОЛНЕНИЯ ---
         self.setup_bulk_fill_panel()
 
-        # 3. Скролл
+        # Скролл
         self.setup_scroll_area()
 
         # Первичная инициализация
-        self.update_years("2026", 0, "1")
+        self.update_years("2026", 0, "12")
 
     def setup_bulk_fill_panel(self):
         """Создает строку с вводом и кнопкой 'Применить ко всем'"""
@@ -72,10 +62,10 @@ class SalesCapacityWidget(QFrame):
         lbl.setStyleSheet("border: none; background: transparent;")
 
         self.bulk_input = QLineEdit()
-        self.bulk_input.setPlaceholderText("100")
+        self.bulk_input.setPlaceholderText("0")
 
-        # Ограничение от 0 до 100 для мощности
-        range_re = QRegularExpression(r"^(100([.,]0+)?|[0-9]?\d?([.,]\d+)?)$")
+        # Ограничение от 0 до 500 для поля массового ввода
+        range_re = QRegularExpression(r"^(500([.,]0+)?|[0-4]?\d?\d?([.,]\d+)?)$")
         self.bulk_input.setValidator(QRegularExpressionValidator(range_re))
 
         self.bulk_input.setFixedSize(60, 30)
@@ -103,8 +93,9 @@ class SalesCapacityWidget(QFrame):
     def apply_to_all_cells(self):
         """Метод для массового заполнения всех ячеек"""
         val_text = self.bulk_input.text().replace(',', '.')
-        if not val_text: val_text = "100"
+        if not val_text: val_text = "0"
 
+        # Превращаем в строку для вставки
         final_text = val_text.replace('.', ',')
 
         for key, le in self.inputs.items():
@@ -119,7 +110,6 @@ class SalesCapacityWidget(QFrame):
             QScrollBar:vertical { border: none; background: #F0F8FF; width: 10px; border-radius: 5px; }
             QScrollBar::handle:vertical { background: #B9D9EB; min-height: 30px; border-radius: 5px; }
             QScrollBar::handle:vertical:hover { background: #A1C9DE; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """)
         self.scroll_content = QWidget()
         self.scroll_content.setStyleSheet("background-color: white;")
@@ -135,10 +125,6 @@ class SalesCapacityWidget(QFrame):
         for i, name in enumerate(names_list, 1):
             if i in self.product_labels:
                 self.product_labels[i].setText(name)
-                for year in self.years:
-                    key = f"cap_{i}_{year}"
-                    if key in self.inputs:
-                        self.inputs[key].setProperty("name", f"{name} ({year})")
 
     def _create_edit(self, default_val, name, product_row, year):
         current_val = self.stored_data.get((product_row, year), default_val)
@@ -148,7 +134,7 @@ class SalesCapacityWidget(QFrame):
         le.setFixedSize(73, 35)
         le.setAlignment(Qt.AlignmentFlag.AlignCenter)
         le.setStyleSheet("""
-            QLineEdit { border: 2px solid #87CEFA; border-radius: 8px; background-color: #E0F7FF; color: #0066CC; padding: 2px; }
+            QLineEdit { border: 2px solid #87CEFA; border-radius: 8px; background-color: #E0F7FF; color: #0066CC; }
             QLineEdit:focus { border: 2px solid #0066CC; background-color: white; }
             QLineEdit:hover { border: 2px solid #0066CC; }
         """)
@@ -165,30 +151,28 @@ class SalesCapacityWidget(QFrame):
         year = le.property("year")
         default = le.property("default")
         try:
-            if not text: raise ValueError
-            val = float(text)
-            if not (0 <= val <= 100): raise ValueError
+            val = float(text) if text else 0.0
+            # Ограничение от 0 до 500
+            if not (0 <= val <= 500): raise ValueError
             self.stored_data[(product_row, year)] = f"{val:.0f}"
-            le.setText(f"{val:.0f}")
+            le.setText(f"{val:.0f}".replace('.', ','))
         except ValueError:
             self.show_error(le.property("name"), default)
-            self.stored_data[(product_row, year)] = default
             le.setText(default.replace('.', ','))
 
     def show_error(self, name, default):
         msg = QMessageBox(self)
         msg.setWindowTitle("Ошибка ввода")
-        msg.setFont(self.msg_font)
-        msg.setText(f"Параметр: <b>{name}</b><br><br>Введите значение от 0 до 100.<br>Восстановлено: {default}%")
-        msg.setStyleSheet("QMessageBox QLabel { min-width: 400px; color: #333333; }")
+        msg.setText(f"Параметр объема: <b>{name}</b><br>Введите число от 0 до 500.")
         msg.exec()
 
-    def update_years(self, start_year, start_month_idx, duration_years):
+    def update_years(self, start_year, start_month_idx, total_horizon_months):
         try:
             y, m = int(start_year), int(start_month_idx) + 1
+            total_m = int(total_horizon_months)
             unique_years = []
             curr_y, curr_m = y, m
-            for _ in range(int(duration_years) * 12):
+            for _ in range(total_m):
                 if str(curr_y) not in unique_years: unique_years.append(str(curr_y))
                 curr_m += 1
                 if curr_m > 12: curr_m = 1; curr_y += 1
@@ -200,13 +184,13 @@ class SalesCapacityWidget(QFrame):
 
             self.product_labels, self.inputs = {}, {}
             for col, year in enumerate(self.years):
-                lbl = QLabel(year);
+                lbl = QLabel(str(year));
                 lbl.setFont(self.label_font);
                 lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 lbl.setStyleSheet("font-weight: bold; background: #D0E6F5; border-radius: 5px; padding: 5px;")
                 self.grid.addWidget(lbl, 0, col + 1)
 
-            for row in range(1, 21):
+            for row in range(1, len(self.last_known_names) + 1):
                 prod_name = self.last_known_names[row - 1]
                 p_lbl = QLabel(prod_name);
                 p_lbl.setFont(self.label_font)
@@ -214,23 +198,20 @@ class SalesCapacityWidget(QFrame):
                 self.grid.addWidget(p_lbl, row, 0)
                 self.product_labels[row] = p_lbl
                 for col, year in enumerate(self.years):
-                    le = self._create_edit("100", f"{prod_name} ({year})", row, year)
+                    le = self._create_edit("0", f"{prod_name} ({year})", row, str(year))
                     self.grid.addWidget(le, row, col + 1)
-                    self.inputs[f"cap_{row}_{year}"] = le
+                    self.inputs[f"growth_{row}_{year}"] = le
             self.grid.setColumnStretch(len(self.years) + 1, 10)
         except Exception as e:
-            print(f"Ошибка CapacityWidget: {e}")
-
-    def get_all_capacity_coefficients(self):
-        result = {}
-        for year in self.years:
-            year_ks = []
-            for row in range(1, 21):
-                key = f"cap_{row}_{year}"
-                val = float(self.inputs[key].text().replace(',', '.')) / 100.0 if key in self.inputs else 1.0
-                year_ks.append(val)
-            result[year] = year_ks
-        return result
+            print(f"Ошибка VolumeGrowthWidget: {e}")
 
     def get_data(self):
-        return self.get_all_capacity_coefficients()
+        result = {}
+        for year in self.years:
+            year_vals = []
+            for row in range(1, len(self.last_known_names) + 1):
+                key = f"growth_{row}_{year}"
+                val = float(self.inputs[key].text().replace(',', '.')) if key in self.inputs else 0.0
+                year_vals.append(val)
+            result[str(year)] = year_vals
+        return result
