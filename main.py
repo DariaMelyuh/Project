@@ -421,6 +421,12 @@ class MainWindow(QWidget):
         self.revenue_params.products_changed.connect(self.volume_growth.update_product_names)
         self.revenue_params.products_changed.connect(self.price_growth.update_product_names)
         self.revenue_params.products_changed.connect(self.sales_capacity.update_product_names)
+
+        # В MainWindow.__init__ или там, где создаются виджеты:
+        self.price_growth.data_changed.connect(self.sync_yearly_table)
+        self.volume_growth.data_changed.connect(self.sync_yearly_table)
+        self.sales_capacity.data_changed.connect(self.sync_yearly_table)
+
         for le in self.seasonality_widget.inputs:
             le.editingFinished.connect(self.sync_yearly_table)
         # В MainWindow.setup_signals
@@ -670,6 +676,11 @@ class MainWindow(QWidget):
             except:
                 start_month, start_year, horizon = 1, 2026, 60
 
+                # --- ВОТ ЭТО НУЖНО ДОБАВИТЬ ПЕРЕД ВЫЗОВОМ ---
+                # Вытаскиваем данные из ваших виджетов роста
+            volume_growth_data = self.volume_growth.get_data()
+            price_growth_data = self.price_growth.get_data()
+
             months_struct = self.yearly_results.generate_columns(start_month, start_year, horizon)
 
             revenue_by_years = self.yearly_results.update_data(
@@ -682,6 +693,8 @@ class MainWindow(QWidget):
                 seasonal_factors=self.seasonality_widget.get_factors(),
                 start_month=start_month,
                 sales_capacity_data=self.sales_capacity.get_data(),
+                volume_growth_data=volume_growth_data,  # ДОБАВИТЬ ЭТО
+                price_growth_data=price_growth_data,  # ДОБАВИТЬ ЭТО
                 capex_data=self.capex_params.get_capex_full_data(),
                 loan_schedule=self.credit_widget.get_interest_schedule(),
                 tax_rates_map=self.taxes_widget.get_tax_rates_by_year()

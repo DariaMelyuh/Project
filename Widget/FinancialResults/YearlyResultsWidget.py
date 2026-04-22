@@ -125,10 +125,10 @@ class YearlyResultsWidget(QFrame):
         self.table.blockSignals(False)
         return months_per_year
 
-
     def update_data(self, months_per_year, products_data, k_scenario,
                     k_scenario_exp, inflation_map, base_opex,
                     seasonal_factors, start_month, sales_capacity_data,
+                    volume_growth_data, price_growth_data,  # Добавлены новые аргументы
                     capex_data, loan_schedule, tax_rates_map):
 
         indicators = [
@@ -152,60 +152,89 @@ class YearlyResultsWidget(QFrame):
         m_rev = [0.0] * total_months
         m_opex = [0.0] * total_months
         m_amort = [0.0] * total_months
+        # Получаем график процентов
         m_interest = [loan_schedule.get(m, 0.0) for m in range(1, total_months + 1)]
 
         # 1. Расчет Выручки и OpEx помесячно
+        # 1. Расчет Выручки помесячно
         abs_m = 0
         curr_m_idx = start_month
-        for year in calendar_years:
-            inf_m = (inflation_map.get(str(year), 0.0)) / 12
-            cap_ks = sales_capacity_data.get(str(year), [1.0] * len(products_data))
-            for _ in range(months_per_year[year]):
-                # Выручка
-                k_s = seasonal_factors[curr_m_idx - 1]
-                m_sum = 0
-                for p_idx, prod in enumerate(products_data):
-                    v_g = (prod['v_growth'] / 100) / 12
-                    p_g = (prod['p_growth'] / 100) / 12
-                    vol = prod['base_vol'] * (1 + v_g) ** abs_m * cap_ks[p_idx] * k_s
-                    prc = prod['base_price'] * (1 + p_g) ** abs_m
-                    m_sum += (vol * prc)
-                m_rev[abs_m] = m_sum * k_scenario
 
-                # OpEx
+        # Инициализируем текущие значения базы
+        curr_v = [prod['base_vol'] for prod in products_data]
+        curr_p = [prod['base_price'] for prod in products_data]
+
+        for year in calendar_years:
+            year_str = str(year)
+            inf_m = (inflation_map.get(year_str, 0.0)) / 12
+
+            num_prods = len(products_data)
+            cap_ks = sales_capacity_data.get(year_str, [1.0] * num_prods)
+            v_growth_year = volume_growth_data.get(year_str, [0.0] * num_prods)
+            p_growth_year = price_growth_data.get(year_str, [0.0] * num_prods)
+
+            for _ in range(months_per_year[year]):
+                seasonal_k = seasonal_factors[(curr_m_idx - 1) % len(seasonal_factors)]
+                m_sum = 0
+
+                for p_idx in range(num_prods):
+                    # Применяем рост СЛЕДУЮЩЕГО шага (цепной метод)
+                    # Если это не самый первый месяц проекта, увеличиваем базу
+                    if abs_m > 0:
+                        v_g_month = (v_growth_year[p_idx] / 100) / 12
+                        p_g_month = (p_growth_year[p_idx] / 100) / 12
+                        curr_v[p_idx] *= (1 + v_g_month)
+                        curr_p[p_idx] *= (1 + p_g_month)
+
+                    vol = curr_v[p_idx] * cap_ks[p_idx] * seasonal_k
+                    prc = curr_p[p_idx]
+                    m_sum += (vol * prc)
+
+                m_rev[abs_m] = m_sum * k_scenario
                 m_opex[abs_m] = base_opex * (1 + inf_m) ** abs_m * k_scenario_exp
 
                 abs_m += 1
                 curr_m_idx = 1 if curr_m_idx == 12 else curr_m_idx + 1
-
-        # 2. Линейная амортизация
+        # 2. Линейная амортизация (без изменений)
         for asset in capex_data:
-            if asset['term'] > 0:
-                m_depr = asset['cost'] / asset['term']
-                for m in range(asset['month'], min(asset['month'] + asset['term'], total_months + 1)):
+            month = int(asset.get('month', 1))
+            term = int(asset.get('term', 0))
+            if term > 0:
+                m_depr = asset['cost'] / term
+                for m in range(month, min(month + term, total_months + 1)):
                     m_amort[m - 1] += m_depr
 
         # 3. Агрегация в годовые колонки
         yearly_vals = {i: [0.0] * len(calendar_years) for i in range(len(indicators))}
         abs_m_ptr = 0
         for y_idx, year in enumerate(calendar_years):
-            tax_rate = tax_rates_map.get(str(year), 0.06)
+            # Получаем ставку налога для конкретного года
+            raw_tax = tax_rates_map.get(str(year), 6)
+            try:
+                tax_rate = float(str(raw_tax).replace(',', '.'))
+                if tax_rate > 1: tax_rate /= 100
+            except:
+                tax_rate = 0.06
+
             for _ in range(months_per_year[year]):
-                rev, opex, amort, intr = m_rev[abs_m_ptr], m_opex[abs_m_ptr], m_amort[abs_m_ptr], m_interest[abs_m_ptr]
+                rev = m_rev[abs_m_ptr]
+                opex = m_opex[abs_m_ptr]
+                amort = m_amort[abs_m_ptr]
+                intr = m_interest[abs_m_ptr]
 
                 ebitda = rev - opex
                 ebit = ebitda - amort
                 ebt = ebit - intr
-                tax = round(ebitda * tax_rate, 2) if ebitda > 0 else 0  # Налог от EBITDA по вашему ТЗ
+                # Налог от EBITDA по вашей логике
+                tax = round(ebitda * tax_rate, 2) if ebitda > 0 else 0.0
                 net = ebt - tax
 
                 row_data = [rev, opex, ebitda, amort, ebit, intr, ebt, tax, net]
                 for r_i, val in enumerate(row_data):
-                    yearly_totals = yearly_vals[r_i]
-                    yearly_totals[y_idx] += val
+                    yearly_vals[r_i][y_idx] += val
                 abs_m_ptr += 1
 
-        # 4. Отрисовка
+        # 4. Отрисовка (без изменений)
         for r in range(len(indicators)):
             self.table.setItem(r, 0, self._create_bold_item(indicators[r]))
             self.table.setItem(r, 1, self._create_total_item(sum(yearly_vals[r])))
@@ -216,7 +245,6 @@ class YearlyResultsWidget(QFrame):
         self.table.blockSignals(False)
         self.update_table_height()
         return yearly_vals[0]
-
     # Вспомогательные методы для чистоты кода
     def _create_bold_item(self, text):
         item = QTableWidgetItem(text)

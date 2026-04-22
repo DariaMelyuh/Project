@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 
 
 class SalesCapacityWidget(QFrame):
+    data_changed = pyqtSignal()
     def __init__(self):
         super().__init__()
         # 1. Настройка шрифтов
@@ -170,6 +171,7 @@ class SalesCapacityWidget(QFrame):
             if not (0 <= val <= 100): raise ValueError
             self.stored_data[(product_row, year)] = f"{val:.0f}"
             le.setText(f"{val:.0f}")
+            self.data_changed.emit()
         except ValueError:
             self.show_error(le.property("name"), default)
             self.stored_data[(product_row, year)] = default

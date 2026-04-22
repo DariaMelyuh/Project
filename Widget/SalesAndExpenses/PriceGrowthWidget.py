@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 
 
 import sys
-from PyQt6.QtCore import Qt, QRegularExpression
+from PyQt6.QtCore import Qt, QRegularExpression,pyqtSignal
 from PyQt6.QtGui import QFont, QRegularExpressionValidator, QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 class PriceGrowthWidget(QFrame):
+    data_changed = pyqtSignal()
     def __init__(self):
         super().__init__()
         self.title_font = QFont("Times New Roman", 14, QFont.Weight.Bold)
@@ -138,6 +139,7 @@ class PriceGrowthWidget(QFrame):
             if not (0 <= val <= 500): raise ValueError
             self.stored_data[(product_row, year)] = f"{val:.0f}"
             le.setText(f"{val:.0f}".replace('.', ','))
+            self.data_changed.emit()
         except ValueError:
             self.show_error(le.property("name"), default)
             le.setText(default.replace('.', ','))
