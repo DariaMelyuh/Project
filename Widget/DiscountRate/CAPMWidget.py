@@ -69,10 +69,27 @@ class CAPMWidget(QFrame):
         le.setMaximumWidth(100)
         le.setFixedHeight(35)
         le.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ОБНОВЛЕННЫЙ СТИЛЬ:
         le.setStyleSheet("""
-            border: 2px solid #87CEFA; border-radius: 8px; 
-            padding: 5px; background-color: #E0F7FF; color: #0066CC;
-        """)
+                    QLineEdit {
+                        border: 2px solid #87CEFA; 
+                        border-radius: 8px; 
+                        padding: 5px; 
+                        background-color: #E0F7FF; 
+                        color: #0066CC;
+                    }
+                    /* Эффект при наведении курсора */
+                    /* Эффект при клике (нажатии) */
+                    QLineEdit:focus {
+                        border: 2px solid #0066CC; /* Темно-синий контур */
+                        background-color: white;   /* Белый фон */
+                    }
+                    /* Эффект при наведении курсора */
+                    QLineEdit:hover {
+                        border: 2px solid #0066CC; /* Чуть темнее основного голубого */
+                                
+                    }
+                """)
 
         # Свойства для валидации
         le.setProperty("key", key)

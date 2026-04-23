@@ -26,7 +26,9 @@ class CreditFundsWidget(QFrame):
         # Шрифты
         self.main_font = QFont("Times New Roman", 12)
         self.bold_font = QFont("Times New Roman", 12, QFont.Weight.Bold)
-
+        self.msg_font = QFont("Times New Roman", 12)
+        # В __init__ измените строку валидатора:
+        self.num_validator = QRegularExpressionValidator(QRegularExpression(r"^[0-9\s.,]*$"))
         # Контейнер
         self.setStyleSheet("""
             QFrame#FinContainer { 
@@ -42,7 +44,7 @@ class CreditFundsWidget(QFrame):
         main_layout.setSpacing(15)
 
         # 1. ЗАГОЛОВОК
-        title = QLabel("Параметры кредитования (Заемные средства)")
+        title = QLabel("Параметры кредитования")
         title.setFont(QFont("Times New Roman", 14, QFont.Weight.Bold))
         title.setStyleSheet("color: #333333; border: none; background: transparent;")
         main_layout.addWidget(title)
@@ -72,6 +74,7 @@ class CreditFundsWidget(QFrame):
 
             # Поле ввода
             le = QLineEdit(default)
+            le.setValidator(self.num_validator)
             le.setFont(self.bold_font)
             le.setAlignment(Qt.AlignmentFlag.AlignCenter)
             le.setFixedHeight(35)
@@ -131,11 +134,25 @@ class CreditFundsWidget(QFrame):
 
     def setup_input_style(self, le):
         le.setStyleSheet("""
-            QLineEdit { 
-                border: 2px solid #87CEFA; border-radius: 8px; 
-                background-color: #E0F7FF; color: #0066CC; padding: 5px; 
-            }
-        """)
+                            QLineEdit {
+                                border: 2px solid #87CEFA; 
+                                border-radius: 8px; 
+                                padding: 5px; 
+                                background-color: #E0F7FF; 
+                                color: #0066CC;
+                            }
+                            /* Эффект при наведении курсора */
+                            /* Эффект при клике (нажатии) */
+                            QLineEdit:focus {
+                                border: 2px solid #0066CC; /* Темно-синий контур */
+                                background-color: white;   /* Белый фон */
+                            }
+                            /* Эффект при наведении курсора */
+                            QLineEdit:hover {
+                                border: 2px solid #0066CC; /* Чуть темнее основного голубого */
+
+                            }
+                        """)
 
     def get_scrollbar_style(self):
         return """
@@ -145,21 +162,23 @@ class CreditFundsWidget(QFrame):
         """
 
     def validate_and_calculate(self, line_edit):
-        """Строгая проверка параметров кредитования с детальными окнами ошибок"""
+        """Строгая проверка параметров с контролем длительности проекта"""
         raw_text = line_edit.text().strip().replace(' ', '').replace(',', '.')
         if raw_text.endswith('.'): raw_text = raw_text[:-1]
 
-        key = line_edit.property("key")  # amount, rate или term
+        key = line_edit.property("key")
 
-        # Значения по умолчанию при ошибке
-        default_map = {
-            "amount": "500000",
-            "rate": "12",
-            "term": "12"
-        }
+        # Получаем текущий горизонт проекта из основного виджета
+        try:
+            horizon_text = self.input_widget.hor_le.text()
+            project_horizon = int(horizon_text) if horizon_text else 60
+        except:
+            project_horizon = 60
+
+        # Значения по умолчанию
+        default_map = {"amount": "500 000", "rate": "12", "term": "12"}
         default = default_map.get(key, "0")
 
-        # Названия для вывода в окне
         names_map = {
             "amount": "Сумма займа",
             "rate": "Процентная ставка",
@@ -171,78 +190,79 @@ class CreditFundsWidget(QFrame):
             if not raw_text: raise ValueError
             val = float(raw_text)
 
-            # --- ЛОГИКА ДЛЯ СУММЫ ---
+            # --- СУММА ---
             if key == "amount":
-                # --- ЛОГИКА ДЛЯ СУММЫ (от 0 до 2 000 000) ---
-                if key == "amount":
-                    if not (0 <= val <= 2000000):
-                        # Вызываем окно с новым диапазоном
-                        self.show_error_msg(field_name, "число от 0 и до 2 000 000", default, "руб.")
-                        raise ValueError
-
-                    # Если проверка прошла, форматируем с пробелами (разрядами)
-                    line_edit.setText(f"{val:,.0f}".replace(',', ' '))
-
-            # --- ЛОГИКА ДЛЯ СТАВКИ ---
-            elif key == "rate":
-                if not (10.0 <= val <= 30.0):
-                    self.show_error_msg(field_name, "от 10 до 30%", default, "%")
+                if not (0 <= val <= 100000000):
+                    self.show_error_msg(field_name, "от 0 до 100 000 000", "500 000", "руб.")
                     raise ValueError
-                line_edit.setText(str(val).replace('.', ','))
+                line_edit.setText(f"{val:,.0f}".replace(',', ' '))
 
-            # --- ЛОГИКА ДЛЯ СРОКА (ОТ 1 ДО 60) ---
+            # --- СТАВКА ---
+            elif key == "rate":
+                if not (0.1 <= val <= 100.0):
+                    self.show_error_msg(field_name, "от 0.1 до 100%", "12", "%")
+                    raise ValueError
+                if val == int(val):
+                    line_edit.setText(str(int(val)))
+                else:
+                    line_edit.setText(f"{val}".replace('.', ','))
+
+            # --- СРОК (С ПРОВЕРКОЙ ГОРИЗОНТА ПРОЕКТА) ---
             elif key == "term":
-                if not (1 <= val <= 60) or val != int(val):
-                    self.show_error_msg(field_name, "целое число от 1 до 60 месяцев", default, "мес.")
+                # Проверка: не больше горизонта проекта и не меньше 1
+                if not (1 <= val <= project_horizon) or val != int(val):
+                    error_rule = f"целое число от 1 до {project_horizon} мес. (не более срока проекта)"
+                    self.show_error_msg(field_name, error_rule, "12", "мес.")
                     raise ValueError
                 line_edit.setText(str(int(val)))
 
-            # Если всё прошло успешно, запускаем расчет таблицы
             self.calculate_loan()
 
         except ValueError:
-            line_edit.setText(default.replace('.', ','))
+            # При ошибке возвращаем дефолт (но дефолт срока тоже проверим на горизонт)
+            if key == "term" and int(default) > project_horizon:
+                line_edit.setText(str(project_horizon))
+            else:
+                line_edit.setText(default.replace('.', ','))
             self.calculate_loan()
-
     def show_error_msg(self, field_name, rules, default_val, unit):
-        """Вызов всплывающего окна в стиле налоговых сценариев"""
+        """Обновленное окно ошибки в едином стиле приложения"""
         msg = QMessageBox(self)
         msg.setWindowTitle("Ошибка ввода")
+        msg.setFont(self.msg_font)
 
-        # Оформляем текст через HTML
-        error_text = f"Параметр: <b>{field_name}</b><br><br>"
-        error_text += f"Допустимые значения: <b>{rules}</b>.<br>"
-        error_text += "Символы, буквы и некорректные значения не допускаются.<br><br>"
-        error_text += f"Будет восстановлено: <b>{default_val} {unit}</b>"
+        # Формируем текст сообщения по вашему стандарту CAPM
+        error_text = (
+            f"Параметр <b>{field_name}</b> указан некорректно.<br><br>"
+            f"Допустимый диапазон: <b>{rules}</b>.<br>"
+            f"Буквы и символы не допускаются.<br><br>"
+            f"Будет восстановлено значение по умолчанию: <b>{default_val} {unit}</b>"
+        )
 
         msg.setText(error_text)
 
-        # Стилизация под ваш пример (ширина текста и кнопки)
+        # Стилизация окна и кнопки точно как в CAPMWidget
         msg.setStyleSheet("""
-                            QMessageBox QLabel { 
-                                color: #333333; 
-                                min-width: 500px; 
-                                max-width: 200px; 
-                                font-family: 'Times New Roman'; 
-                                font-size: 16px;
-                            }
-                        
-            
-               
-                QPushButton { 
-                    font-family: 'Times New Roman'; 
-                    font-size: 14px; 
-                    min-width: 90px; 
-                    padding: 5px; 
-                    background-color: #E0F7FF;
-                    border: 1px solid #87CEFA;
-                    border-radius: 5px;
-                }
-                QPushButton:hover { background-color: #B9D9EB; }
-            """)
-
+            QMessageBox QLabel { 
+                color: #333333; 
+                min-width: 500px; 
+            }
+            QPushButton { 
+                font-family: 'Times New Roman'; 
+                font-size: 14px; 
+                min-width: 100px; 
+                padding: 6px; 
+                background-color: #E0F7FF;
+                border: 2px solid #87CEFA;
+                border-radius: 8px;
+                color: #0066CC;
+            }
+            QPushButton:hover { 
+                background-color: #B9D9EB; 
+                border: 2px solid #0066CC;
+            }
+        """)
         msg.exec()
-
     def calculate_loan(self):
         # 1. Очистка старой сетки
         for i in reversed(range(self.grid_layout.count())):
