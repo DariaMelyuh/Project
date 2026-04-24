@@ -61,7 +61,7 @@ class PriceGrowthWidget(QFrame):
         self.bulk_input = QLineEdit()
         self.bulk_input.setPlaceholderText("0")
         self.bulk_input.setValidator(self.num_validator)
-        range_re = QRegularExpression(r"^(500([.,]0+)?|[0-4]?\d?\d?([.,]\d+)?)$")
+        range_re = QRegularExpression(r"^(100([.,]0+)?|[0-9]?\d([.,]\d+)?)$")
         self.bulk_input.setValidator(QRegularExpressionValidator(range_re))
         self.bulk_input.setFixedSize(60, 30)
         self.bulk_input.setFont(self.input_font)
@@ -70,7 +70,7 @@ class PriceGrowthWidget(QFrame):
 
         apply_btn = QPushButton("Применить")
         apply_btn.setFixedSize(100, 30)
-        apply_btn.setFont(QFont("Times New Roman", 10, QFont.Weight.Bold))
+        apply_btn.setFont(QFont("Times New Roman", 12, QFont.Weight.Bold))
         apply_btn.setStyleSheet("""
             QPushButton { background-color: #87CEFA; color: white; border-radius: 5px; }
             QPushButton:hover { background-color: #A1C9DE; }
@@ -130,26 +130,81 @@ class PriceGrowthWidget(QFrame):
         return le
 
     def validate_input(self, le):
-        text = le.text().replace(',', '.')
+        text_raw = le.text().strip()
+
+        # Убираем лишние точки/запятые в конце
+        if text_raw.endswith(',') or text_raw.endswith('.'):
+            text_raw = text_raw[:-1]
+
+        text = text_raw.replace(',', '.')
         product_row = le.property("product_row")
         year = le.property("year")
+        name = le.property("name")
         default = le.property("default")
-        try:
-            val = float(text) if text else 0.0
-            if not (0 <= val <= 500): raise ValueError
-            self.stored_data[(product_row, year)] = f"{val:.0f}"
-            le.setText(f"{val:.0f}".replace('.', ','))
-            self.data_changed.emit()
-        except ValueError:
-            self.show_error(le.property("name"), default)
-            le.setText(default.replace('.', ','))
 
-    def show_error(self, name, default):
+        max_val = 100.0  # Изменили с 500 на 100
+        min_val = 0.0
+
+        try:
+            if not text: raise ValueError
+            val = float(text)
+
+            if not (min_val <= val <= max_val):
+                raise ValueError
+
+            # Форматирование: целое число или 2 знака
+            clean_val = str(int(val)) if val == int(val) else f"{val:.2f}".replace('.', ',').rstrip('0').rstrip(',')
+
+            self.stored_data[(product_row, year)] = clean_val
+            le.setText(clean_val.replace('.', ','))
+            self.data_changed.emit()
+
+        except ValueError:
+            # Вызов нового окна ошибки
+            self.show_error(name, year, default, max_val)
+
+            # Восстановление значения
+            le.setText(default.replace('.', ','))
+            self.stored_data[(product_row, year)] = default
+            self.data_changed.emit()
+    def show_error(self, name, year, default, max_val):
+        """Обновленное окно ошибки в стиле проекта"""
         msg = QMessageBox(self)
         msg.setWindowTitle("Ошибка ввода")
-        msg.setText(f"Параметр цены: <b>{name}</b><br>Введите число от 0 до 500.")
-        msg.exec()
+        msg.setFont(self.label_font)
 
+        # Текст по шаблону: Параметр + Название товара + Год + Лимит
+        error_text = (
+            f"Параметр <b>Темп роста цены</b> для <b>{name}</b>  указан некорректно.<br><br>"
+            f"Допустимый диапазон: от <b>0</b> до <b>{int(max_val)}%</b>.<br>"
+            f"Буквы и символы не допускаются.<br><br>"
+            f"Будет восстановлено значение по умолчанию: <b>{default}</b>"
+        )
+
+        msg.setText(error_text)
+
+        # Применяем фирменную стилизацию кнопок и меток
+        msg.setStyleSheet("""
+            QMessageBox QLabel { 
+                color: #333333; 
+                min-width: 520px; 
+            }
+            QPushButton { 
+                font-family: 'Times New Roman'; 
+                font-size: 14px; 
+                min-width: 100px; 
+                padding: 6px; 
+                background-color: #E0F7FF;
+                border: 2px solid #87CEFA;
+                border-radius: 8px;
+                color: #0066CC;
+            }
+            QPushButton:hover { 
+                background-color: #B9D9EB; 
+                border: 2px solid #0066CC;
+            }
+        """)
+        msg.exec()
     def update_years(self, start_year, start_month_idx, horizon_months):
         try:
             y, m = int(start_year), int(start_month_idx) + 1

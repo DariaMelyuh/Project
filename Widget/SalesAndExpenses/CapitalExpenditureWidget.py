@@ -65,7 +65,7 @@ class CapitalExpenditureWidget(QFrame):
         self.table.setStyleSheet("""
             QTableWidget { 
                 border: 1px solid #D0E6F5; 
-                border-radius: 15px;      
+                
                 gridline-color: #E1EFF8; 
                 font-family: 'Times New Roman'; 
                 font-size: 12pt;
@@ -121,6 +121,7 @@ class CapitalExpenditureWidget(QFrame):
 
         self.apply_btn = QPushButton("Принять данные")
         self.apply_btn.setFixedSize(220, 35)
+        self.apply_btn.setFont(QFont("Times New Roman", 12, QFont.Weight.Bold))
         self.set_apply_btn_style("default")
         self.apply_btn.clicked.connect(self.accept_data)
         self.layout.addWidget(self.apply_btn, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -219,33 +220,55 @@ class CapitalExpenditureWidget(QFrame):
             # 5. РАЗБЛОКИРУЕМ сигналы обратно
             self.table.blockSignals(False)
     def show_error(self, message, asset_name, col):
+        """Обновленное стилизованное окно ошибки для CapEx"""
         msg = QMessageBox(self)
         msg.setWindowTitle("Ошибка ввода")
         msg.setFont(QFont("Times New Roman", 12))
 
-        # Динамическая подсказка
+        # 1. Формируем заголовок колонки для понятности
+        headers = ["Наименование", "Итоговая стоимость", "Месяц покупки", "Срок службы", "Базовая стоимость", "Изменение цены"]
+        col_name = headers[col] if col < len(headers) else "Параметр"
+
+        # 2. Динамическая подсказка (уже была в вашем коде, адаптируем под стиль)
         if col == 2:
             limit_hint = f"целое число от <b>1</b> до <b>{self.PROJECT_HORIZON}</b>"
         elif col == 3:
-            limit_hint = f"целое число (сумма месяца покупки и срока не более <b>{self.PROJECT_HORIZON}</b>)"
+            limit_hint = f"целое число и срок не более <b>{self.PROJECT_HORIZON}</b>)"
         elif col == 4:
-            limit_hint = "положительное число от <b>0</b> до <b>1 000 000</b>"
+            limit_hint = "число от <b>0</b> до <b>1 000 000 000</b>"
         elif col == 5:
-            limit_hint = "процент от <b>0</b> до <b>100</b>"
+            limit_hint = "процент от <b>0</b> до <b>100%</b>"
         else:
             limit_hint = "положительное число"
 
-        error_text = f"Актив: <b>{asset_name}</b><br><br>"
-        error_text += f"Ошибка: <b>{message}</b><br>"
-        error_text += f"Требование: {limit_hint}.<br><br>"
-        error_text += "Будет возвращено исходное значение."
+        # 3. Содержание текста
+        error_text = (
+            f"Параметр <b>{col_name}</b> для актива <b>{asset_name}</b> указан некорректно.<br><br>"
+            f"Требование: {limit_hint}.<br><br>"
+            f"Будет восстановлено исходное значение."
+        )
 
         msg.setText(error_text)
+
+        # 4. Стилизация в стиле проекта
         msg.setStyleSheet("""
-            QMessageBox QLabel { color: #333333; min-width: 500px; }
+            QMessageBox QLabel { 
+                color: #333333; 
+                min-width: 500px; 
+            }
             QPushButton { 
-                min-width: 90px; padding: 5px; background-color: #E0F7FF;
-                border: 1px solid #87CEFA; border-radius: 5px; 
+                font-family: 'Times New Roman'; 
+                font-size: 14px; 
+                min-width: 100px; 
+                padding: 6px; 
+                background-color: #E0F7FF;
+                border: 2px solid #87CEFA;
+                border-radius: 8px;
+                color: #0066CC;
+            }
+            QPushButton:hover { 
+                background-color: #B9D9EB; 
+                border: 2px solid #0066CC;
             }
         """)
         msg.exec()
@@ -302,6 +325,7 @@ class CapitalExpenditureWidget(QFrame):
 
 
     def set_apply_btn_style(self, state):
+
         styles = {
             "default": "background-color: #E0F7FF; color: #2C3E50; border-radius: 8px; font-weight: bold; border: 1px solid #B0D4E3;",
             "success": "background-color: #C8E6C9; color: #2E7D32; border-radius: 8px; font-weight: bold; border: 1px solid #A5D6A7;",

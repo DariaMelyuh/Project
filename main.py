@@ -112,12 +112,10 @@ class MainWindow(QWidget):
                 background-color: #B9D9EB;
                 color: #333333;
             }
-
             QPushButton:pressed {
                 background-color: #B9D9EB;
             }
         """)
-
         self.info_btn.clicked.connect(self.show_app_info)
         header.addWidget(title)
         header.addStretch()

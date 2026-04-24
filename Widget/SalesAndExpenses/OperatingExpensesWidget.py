@@ -45,7 +45,7 @@ class OperatingExpensesWidget(QFrame):
 
         # 2. ТАБЛИЦА
         self.table = QTableWidget(len(self.expenses_data), 4)
-
+        self.table.setFrameShape(QFrame.Shape.NoFrame)
         # Текст с переносом
         headers = [
             "Наименование",
@@ -70,22 +70,26 @@ class OperatingExpensesWidget(QFrame):
 
         # Размеры
         # --- ИСПРАВЛЕННЫЕ РАЗМЕРЫ ---
-        self.setFixedWidth(648)  # Уменьшаем ширину самого контейнера, чтобы не было дырки справа
+        # --- ИСПРАВЛЕННЫЕ РАЗМЕРЫ (БЕЗ СКРОЛЛА) ---
+        # Уменьшаем общую карточку (контейнер), чтобы она плотно облегала таблицу
+        self.setFixedWidth(600)
 
-        # Ширина таблицы должна быть равна сумме колонок + 2-4 пикселя на рамки
-        self.table.setFixedWidth(572)
+        # Сумма колонок: 180 + 130 + 130 + 80 = 520
+        # Добавляем 2 пикселя на внешние границы таблицы = 522
+        self.table.setFixedWidth(540)
 
-        self.table.setColumnWidth(0, 200)
-        self.table.setColumnWidth(1, 150)
-        self.table.setColumnWidth(2, 140)
-        self.table.setColumnWidth(3, 80)
+        self.table.setColumnWidth(0, 180)  # Наименование
+        self.table.setColumnWidth(1, 130)  # Итоговая стоимость
+        self.table.setColumnWidth(2, 130)  # Стоимость, руб
+        self.table.setColumnWidth(3, 80)  # %
 
         # Стилизация таблицы как в первом примере
         # Стилизация таблицы с закруглением углов
+        # Замените старый стиль таблицы на этот:
+        # Стилизация таблицы: полная синхронизация с левым виджетом
         self.table.setStyleSheet("""
                     QTableWidget { 
                         border: 1px solid #D0E6F5; 
-                        border-radius: 15px;      /* Закругление самой таблицы */
                         gridline-color: #E1EFF8; 
                         font-family: 'Times New Roman'; 
                         font-size: 12pt;
@@ -98,23 +102,30 @@ class OperatingExpensesWidget(QFrame):
                         font-family: 'Times New Roman'; 
                         font-weight: bold; 
                         font-size: 11pt;
+                        /* Важно: border должен быть таким же, как слева */
                         border: 1px solid #D0E6F5; 
                         padding: 2px; 
                     }
-                    /* Закругление углов для шапки таблицы */
-                    QHeaderView::section:horizontal:first {
-                        border-top-left-radius: 14px;
+
+                    /* Закругления первой и последней ячейки шапки */
+                    QHeaderView::section:horizontal:first { 
+                        border-top-left-radius: 15px; 
                     }
-                    QHeaderView::section:horizontal:last {
-                        border-top-right-radius: 14px;
+                    QHeaderView::section:horizontal:last { 
+                        border-top-right-radius: 15px; 
                     }
-                    QTableWidget::item { color: black; }
+
+                  QTableWidget::item:selected {
+        background-color: transparent;
+        color: black;
+    }
                 """)
         self.fill_data()
         self.table.cellChanged.connect(self.validate_cell)
-        self.table.setFixedHeight(318)
+        self.table.setFixedHeight(313)
 
-        self.layout.addWidget(self.table)
+        # Находим строку, где добавляется таблица, и меняем на:
+        self.layout.addWidget(self.table, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # 3. ФУТЕР
         footer_layout = QHBoxLayout()
@@ -132,6 +143,7 @@ class OperatingExpensesWidget(QFrame):
 
         self.apply_btn = QPushButton("Принять данные")
         self.apply_btn.setFixedSize(220, 35)
+        self.apply_btn.setFont(QFont("Times New Roman", 12, QFont.Weight.Bold))
         self.set_apply_btn_style("default")
         self.apply_btn.clicked.connect(self.accept_data)
         footer_layout.addWidget(self.apply_btn)
@@ -142,16 +154,12 @@ class OperatingExpensesWidget(QFrame):
     def fill_data(self):
         self.table.blockSignals(True)
         for r, data in enumerate(self.expenses_data):
-            # Наименование
+            # 0. Наименование
             name_item = QTableWidgetItem(data[0])
-            name_item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-
-            # --- ИСПРАВЛЕНИЕ: ЗАПРЕТ РЕДАКТИРОВАНИЯ ПЕРВОГО СТОЛБЦА ---
-            # Убираем флаг редактирования, оставляя возможность выделения
             name_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             self.table.setItem(r, 0, name_item)
 
-            # Итоговая сумма (Колонка 1 - только для чтения)
+            # 1. Итоговая сумма (Всегда с копейками, так как это деньги)
             total = data[1] + (data[1] * data[2] / 100)
             res_item = QTableWidgetItem(self.format_as_money(total))
             res_item.setFlags(res_item.flags() ^ Qt.ItemFlag.ItemIsEditable)
@@ -159,14 +167,17 @@ class OperatingExpensesWidget(QFrame):
             res_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(r, 1, res_item)
 
-            # База (Колонка 2)
+            # 2. База (Деньги - всегда с копейками)
             base_item = QTableWidgetItem(self.format_as_money(data[1]))
             base_item.setBackground(QBrush(QColor("#E0F7FF")))
             base_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(r, 2, base_item)
 
-            # % (Колонка 3)
-            perc_item = QTableWidgetItem(str(data[2]))
+            # 3. % (ИСПРАВЛЕНО: убираем ,0 если число целое)
+            perc_val = data[2]
+            # Если число равно своему целому значению, пишем как int
+            perc_text = str(int(perc_val)) if perc_val == int(perc_val) else str(perc_val).replace('.', ',')
+            perc_item = QTableWidgetItem(perc_text)
             perc_item.setBackground(QBrush(QColor("#E0F7FF")))
             perc_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(r, 3, perc_item)
@@ -177,90 +188,99 @@ class OperatingExpensesWidget(QFrame):
         return f"{val:,.2f}".replace(',', ' ').replace('.', ',')
 
     def show_error_msg(self, field_name, rules, default_val, unit):
-        """Вызов всплывающего окна в стиле вашего примера"""
+        """Обновленное стилизованное окно ошибки в стиле проекта"""
         msg = QMessageBox(self)
         msg.setWindowTitle("Ошибка ввода")
+        msg.setFont(QFont("Times New Roman", 12))
 
-
-        error_text = f"Параметр: <b>{field_name}</b><br><br>"
-        error_text += f"Допустимые значения: <b>{rules}</b>.<br>"
-        error_text += "Символы, буквы и некорректные значения не допускаются.<br><br>"
-        error_text += f"Будет восстановлено значение по умолчанию: <b>{default_val} {unit}</b>"
+        # Содержание текста с выделением параметров
+        error_text = (
+            f"Параметр <b>{field_name}</b> указан некорректно.<br><br>"
+            f"Допустимый диапазон: <b>{rules}</b> {unit}.<br>"
+            f"Буквы, специальные символы и пустые поля не допускаются.<br><br>"
+            f"Будет восстановлено значение по умолчанию: <b>{default_val} {unit}</b>"
+        )
 
         msg.setText(error_text)
+
+        # Применяем фирменную стилизацию кнопок и меток
         msg.setStyleSheet("""
             QMessageBox QLabel { 
                 color: #333333; 
-                min-width: 400px; 
-                font-family: 'Times New Roman'; 
-                font-size: 16px;
+                min-width: 500px; 
+                font-family: 'Times New Roman';
+                font-size: 15px;
             }
             QPushButton { 
                 font-family: 'Times New Roman'; 
                 font-size: 14px; 
-                min-width: 100px; 
-                padding: 8px; 
+                min-width: 110px; 
+                padding: 7px; 
                 background-color: #E0F7FF;
-                border: 1px solid #87CEFA;
-                border-radius: 5px;
+                border: 2px solid #87CEFA;
+                border-radius: 8px;
+                color: #0066CC;
+                font-weight: bold;
             }
-            QPushButton:hover { background-color: #B9D9EB; }
+            QPushButton:hover { 
+                background-color: #B9D9EB; 
+                border: 2px solid #0066CC;
+            }
         """)
         msg.exec()
-
     # --- ОБНОВЛЕННЫЙ МЕТОД ВАЛИДАЦИИ ---
     def validate_cell(self, row, col):
-        if col == 0 or col == 1: return  # Не трогаем имя и итог
+        if col == 0 or col == 1: return
 
         self.table.blockSignals(True)
         item = self.table.item(row, col)
         raw_text = item.text().strip().replace(' ', '').replace(',', '.')
 
-        # Убираем точку в конце, если пользователь случайно её поставил
         if raw_text.endswith('.'): raw_text = raw_text[:-1]
 
         try:
             if not raw_text: raise ValueError
             val = float(raw_text)
 
-            # Проверка для СТОИМОСТИ (Колонка 2)
-            if col == 2:
+            if col == 2:  # Стоимость
                 if not (0 <= val <= 3000000):
-                    default_val = self.expenses_data[row][1]
-                    self.show_error_msg("Стоимость (база)", "от 0 до 3 000 000", self.format_as_money(default_val),
+                    self.show_error_msg("Стоимость", "0 - 3 000 000", self.format_as_money(self.expenses_data[row][1]),
                                         "руб.")
                     raise ValueError
-
-                # Если всё ок, форматируем ввод
                 item.setText(self.format_as_money(val))
 
-            # Проверка для ПАРАМЕТРА ИЗМЕНЕНИЯ (Колонка 3)
-            elif col == 3:
+            elif col == 3:  # Проценты (ИСПРАВЛЕНО)
                 if not (0 <= val <= 100):
-                    default_val = self.expenses_data[row][2]
-                    self.show_error_msg("Параметр изменения", "от 0 до 100%", default_val, "%")
+                    default_perc = self.expenses_data[row][2]
+                    # Красивый вывод дефолтного значения в ошибке
+                    err_val = str(int(default_perc)) if default_perc == int(default_perc) else str(
+                        default_perc).replace('.', ',')
+                    self.show_error_msg("Параметр изменения", "0 - 100", err_val, "%")
                     raise ValueError
 
-                # Форматируем ввод (убираем лишние нули после запятой если целое)
-                item.setText(str(val).replace('.', ','))
+                # ИСПРАВЛЕНО: сохраняем ввод как целое, если нет дробной части
+                if val == int(val):
+                    item.setText(str(int(val)))
+                else:
+                    item.setText(str(val).replace('.', ','))
 
-            # Общий пересчет если ошибок нет
             self.recalculate_row(row)
             self.set_apply_btn_style("warning")
             self.update_overall_total()
 
         except ValueError:
-            # Возврат к значениям по умолчанию из исходных данных
+            # Откат (ИСПРАВЛЕНО)
             if col == 2:
                 item.setText(self.format_as_money(self.expenses_data[row][1]))
             else:
-                item.setText(str(self.expenses_data[row][2]).replace('.', ','))
+                default_val = self.expenses_data[row][2]
+                text = str(int(default_val)) if default_val == int(default_val) else str(default_val).replace('.', ',')
+                item.setText(text)
 
             self.recalculate_row(row)
             self.update_overall_total()
 
         self.table.blockSignals(False)
-
     def recalculate_row(self, row):
         """Вспомогательный метод для пересчета итогов в строке"""
         try:

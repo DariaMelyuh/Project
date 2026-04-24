@@ -1,7 +1,7 @@
 import sys
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QScrollArea, QFrame, QGridLayout, QPushButton
+    QLineEdit, QScrollArea, QFrame, QGridLayout, QPushButton, QMessageBox
 )
 from PyQt6.QtCore import Qt, QRegularExpression, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QRegularExpressionValidator
@@ -20,7 +20,7 @@ class AssetSalesWidget(QFrame):
         self.bold_font = QFont("Times New Roman", 12, QFont.Weight.Bold)
 
         self.validator = QRegularExpressionValidator(
-            QRegularExpression(r"^\d+([.,]\d{0,2})?$")
+            QRegularExpression(r"^\d*[.,]?\d{0,2}$")
         )
 
         self.setObjectName("AssetSalesContainer")
@@ -44,6 +44,7 @@ class AssetSalesWidget(QFrame):
 
         self.apply_btn = QPushButton("Принять данные")
         self.apply_btn.setFixedSize(200, 35)
+        self.apply_btn.setFont(QFont("Times New Roman", 12, QFont.Weight.Bold))
         self.set_apply_btn_style("default")  # Начальный стиль
         self.apply_btn.clicked.connect(self.confirm_data)
 
@@ -202,15 +203,50 @@ class AssetSalesWidget(QFrame):
             self.stored_data[month_num] = 0.0
             line_edit.setText("0,00")
 
-    def format_on_finish(self, line_edit):
+    def format_and_store(self, line_edit):
+        """Проверка диапазона и умное форматирование (без ,00 для целых чисел)"""
         raw_text = line_edit.text().strip().replace(' ', '').replace(',', '.')
-        try:
-            val = float(raw_text) if raw_text else 0.0
-            formatted = f"{val:,.2f}".replace(',', ' ').replace('.', ',')
-            line_edit.setText(formatted)
-        except ValueError:
-            line_edit.setText("0,00")
+        month_num = line_edit.property("month_num")
 
+        max_limit = 1000000000.0
+        # Значение из памяти для отката
+        old_val = self.stored_data.get(month_num, 0.0)
+
+        # Функция для красивого отображения (используется и для отката, и для вывода)
+        def smart_format(value):
+            if value == 0:
+                return "0"
+            # Если число целое (например, 1000.0), убираем дробную часть
+            if value == int(value):
+                return f"{int(value):,}".replace(',', ' ')
+            # Если есть копейки, оставляем 2 знака
+            return f"{value:,.2f}".replace(',', ' ').replace('.', ',')
+
+        try:
+            if not raw_text:
+                val = 0.0
+            else:
+                val = float(raw_text)
+
+            # Проверка диапазона
+            if val < 0 or val > max_limit:
+                raise ValueError
+
+            # Сохраняем "чистое" число
+            self.stored_data[month_num] = val
+
+            # Применяем умное форматирование к полю ввода
+            line_edit.setText(smart_format(val))
+
+        except ValueError:
+            # Подготавливаем текст старого значения для окна ошибки
+            default_display = smart_format(old_val)
+
+            # Вызываем окно ошибки
+            self.show_error(month_num, default_display, max_limit)
+
+            # Возвращаем старое корректное значение в поле
+            line_edit.setText(default_display)
     def confirm_data(self):
         """Нажатие на кнопку 'Принять'"""
         # 1. Получаем список чистых значений через ваш метод get_values (убедитесь, что он есть в классе)
@@ -252,3 +288,42 @@ class AssetSalesWidget(QFrame):
         # Сортируем по месяцу на всякий случай
         data.sort(key=lambda x: x['month'])
         return data
+
+    def show_error(self, month_num, default_val, max_val):
+        """Обновленное окно ошибки в стиле проекта"""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Ошибка ввода")
+        msg.setFont(self.main_font)
+
+        # Форматируем максимальное число с пробелами для красоты
+        max_formatted = f"{max_val:,.0f}".replace(',', ' ')
+
+        error_text = (
+            f"Параметр <b>Стоимость продажи</b> (месяц <b>{month_num}</b>) указан некорректно.<br><br>"
+            f"Допустимый диапазон: от <b>0</b> до <b>{max_formatted}</b> руб.<br>"
+            f"Буквы и специальные символы не допускаются.<br><br>"
+            f"Будет восстановлено значение: <b>{default_val}</b>"
+        )
+
+        msg.setText(error_text)
+        msg.setStyleSheet("""
+            QMessageBox QLabel { 
+                color: #333333; 
+                min-width: 500px; 
+            }
+            QPushButton { 
+                font-family: 'Times New Roman'; 
+                font-size: 14px; 
+                min-width: 100px; 
+                padding: 6px; 
+                background-color: #E0F7FF;
+                border: 2px solid #87CEFA;
+                border-radius: 8px;
+                color: #0066CC;
+            }
+            QPushButton:hover { 
+                background-color: #B9D9EB; 
+                border: 2px solid #0066CC;
+            }
+        """)
+        msg.exec()

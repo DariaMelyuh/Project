@@ -87,7 +87,7 @@ class SalesCapacityWidget(QFrame):
 
         apply_btn = QPushButton("Применить")
         apply_btn.setFixedSize(100, 30)
-        apply_btn.setFont(QFont("Times New Roman", 10, QFont.Weight.Bold))
+        apply_btn.setFont(QFont("Times New Roman", 12, QFont.Weight.Bold))
         apply_btn.setStyleSheet("""
             QPushButton { background-color: #87CEFA; color: white; border-radius: 5px; }
             QPushButton:hover { background-color: #A1C9DE; }
@@ -161,28 +161,82 @@ class SalesCapacityWidget(QFrame):
         return le
 
     def validate_input(self, le):
-        text = le.text().replace(',', '.')
+        """Проверка ввода коэффициента мощности (0-100%)"""
+        text_raw = le.text().strip()
+
+        # Убираем лишние точки/запятые в конце
+        if text_raw.endswith(',') or text_raw.endswith('.'):
+            text_raw = text_raw[:-1]
+
+        text = text_raw.replace(',', '.')
         product_row = le.property("product_row")
         year = le.property("year")
+        name = le.property("name")
         default = le.property("default")
+
+        max_val = 100.0
+        min_val = 0.0
+
         try:
             if not text: raise ValueError
             val = float(text)
-            if not (0 <= val <= 100): raise ValueError
-            self.stored_data[(product_row, year)] = f"{val:.0f}"
-            le.setText(f"{val:.0f}")
-            self.data_changed.emit()
-        except ValueError:
-            self.show_error(le.property("name"), default)
-            self.stored_data[(product_row, year)] = default
-            le.setText(default.replace('.', ','))
 
-    def show_error(self, name, default):
+            if not (min_val <= val <= max_val):
+                raise ValueError
+
+            # Умное форматирование: если число целое, убираем .0
+            clean_val = str(int(val)) if val == int(val) else f"{val:.2f}".replace('.', ',').rstrip('0').rstrip(',')
+
+            self.stored_data[(product_row, year)] = clean_val
+            le.setText(clean_val.replace('.', ','))
+            self.data_changed.emit()
+
+        except ValueError:
+            # Вызов стилизованного окна ошибки
+            self.show_error(name, year, default, max_val)
+
+            # Восстановление значения
+            le.setText(default.replace('.', ','))
+            self.stored_data[(product_row, year)] = default
+            self.data_changed.emit()
+
+    def show_error(self, name, year, default, max_val):
+        """Обновленное окно ошибки в стиле проекта"""
         msg = QMessageBox(self)
         msg.setWindowTitle("Ошибка ввода")
-        msg.setFont(self.msg_font)
-        msg.setText(f"Параметр: <b>{name}</b><br><br>Введите значение от 0 до 100.<br>Восстановлено: {default}%")
-        msg.setStyleSheet("QMessageBox QLabel { min-width: 400px; color: #333333; }")
+        msg.setFont(self.label_font)
+
+        # Текст ошибки с выделением ключевых параметров
+        error_text = (
+            f"Параметр <b>Коэффициент мощности</b> для <b>{name}</b> (год <b>{year}</b>) указан некорректно.<br><br>"
+            f"Допустимый диапазон: от <b>0</b> до <b>{int(max_val)}%</b>.<br>"
+            f"Буквы и специальные символы не допускаются.<br><br>"
+            f"Будет восстановлено значение по умолчанию: <b>{default}%</b>"
+        )
+
+        msg.setText(error_text)
+
+        # Применяем фирменную стилизацию кнопок и меток
+        msg.setStyleSheet("""
+            QMessageBox QLabel { 
+                color: #333333; 
+                min-width: 500px; 
+            }
+            QPushButton { 
+                font-family: 'Times New Roman'; 
+                font-size: 14px; 
+                min-width: 100px; 
+                padding: 6px; 
+                background-color: #E0F7FF;
+                border: 2px solid #87CEFA;
+                border-radius: 8px;
+                color: #0066CC;
+            }
+            QPushButton:hover { 
+                background-color: #B9D9EB; 
+                border: 2px solid #0066CC;
+            }
+        """)
         msg.exec()
 
     def update_years(self, start_year, start_month_idx, duration_years):

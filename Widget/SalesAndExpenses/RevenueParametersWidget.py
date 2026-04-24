@@ -57,7 +57,7 @@ class RevenueParametersWidget(QFrame):
         """)
 
         self.layout = QVBoxLayout(self)
-        title = QLabel("Товары")
+        title = QLabel("База товаров")
         title.setFont(QFont("Times New Roman", 14, QFont.Weight.Bold))
         title.setStyleSheet("color: black; background: transparent; border: none;")
         self.layout.addWidget(title)
@@ -85,7 +85,7 @@ class RevenueParametersWidget(QFrame):
         self.apply_table_styles()
 
         self.fill_default_data()
-        self.table.cellChanged.connect(self.validate_cell)
+        self.table.itemChanged.connect(self.validate_cell)
 
         self.table.setFixedHeight(35 * 7)
         self.layout.addWidget(self.table)
@@ -101,7 +101,7 @@ class RevenueParametersWidget(QFrame):
     def apply_table_styles(self):
         self.table.setStyleSheet("""
             QTableWidget { 
-                border: 1px solid #D0E6F5; border-radius: 15px; 
+                border: 1px solid #D0E6F5; 
                 gridline-color: #E1EFF8; font-family: 'Times New Roman'; 
                 font-size: 12pt; background-color: white;
             }
@@ -109,6 +109,8 @@ class RevenueParametersWidget(QFrame):
                 background-color: #B9D9EB; font-family: 'Times New Roman'; 
                 font-size: 11pt; font-weight: bold; border: 1px solid #D0E6F5; padding: 2px; 
             }
+           QHeaderView::section:horizontal:first { border-top-left-radius: 15px; }
+            QHeaderView::section:horizontal:last { border-top-right-radius: 15px; }
             QScrollBar:vertical { border: none; background: #F0F8FF; width: 12px; border-radius: 6px; }
             QScrollBar::handle:vertical { background-color: #B9D9EB; min-height: 20px; border-radius: 6px; }
             QScrollBar::handle:vertical:hover { background-color: #A1C9DE; }
@@ -134,50 +136,110 @@ class RevenueParametersWidget(QFrame):
             self.table.setRowHeight(r, 35)
         self.table.blockSignals(False)
 
-    def validate_cell(self, row, col):
-        if self.table.signalsBlocked(): return
+    def validate_cell(self, item):
+        if self.table.signalsBlocked():
+            return
+
+        row = item.row()
+        col = item.column()
+
         if col == 0:
             self.emit_products()
             return
 
-        item = self.table.item(row, col)
-        if not item: return
+        self.table.blockSignals(True)
 
-        raw_text = item.text().replace(',', '.').strip()
-        default_val = str(self.default_data_list[row][col]).replace('.', ',')
+        raw_text = item.text().replace(',', '.').replace(' ', '').strip()
+        # Значение по умолчанию тоже пропускаем через форматирование
+        default_val_raw = self.default_data_list[row][col]
 
         headers_names = [
             "Наименование", "Цена", "Объем", "Начальная цена",
             "Начальный объем", "Параметр изм. цены", "Параметр изм. объема"
         ]
         param_name = headers_names[col]
-        is_percent = col in [5, 6]
 
         self.apply_btn.setText("Принять изменения *")
         self.set_apply_btn_style("warning")
 
+        def format_num(val):
+            """Убирает .0 если число целое, иначе оставляет 2 знака"""
+            if val == int(val):
+                return str(int(val))
+            return f"{val:.2f}".replace('.', ',')
+
         try:
             if not raw_text: raise ValueError
-            value = float(raw_text.replace(' руб.', ''))
-            if value < 0: raise ValueError
+            value = float(raw_text)
 
-            self.table.blockSignals(True)
-            if col == 3: # Начальная цена
-                formatted = f"{value:,.2f}".replace(',', ' ').replace('.', ',')
-                item.setText(formatted)
-            else:
-                item.setText(str(value).replace('.', ','))
-            self.table.blockSignals(False)
+            # Проверки диапазонов
+            valid = True
+            if col == 4:  # Начальный объем
+                if not (0 <= value <= 10000):
+                    self.show_error_message(param_name, "от 0 до 10 000 ед.", format_num(default_val_raw))
+                    item.setText(format_num(default_val_raw))
+                    valid = False
+            elif col in [5, 6]:  # Параметры %
+                if not (0 <= value <= 100):
+                    self.show_error_message(param_name, "от 0 до 100 %", format_num(default_val_raw))
+                    item.setText(format_num(default_val_raw))
+                    valid = False
+            elif value < 0:
+                raise ValueError
 
-            # Пересчет
-            if col in [3, 5]: self.recalculate_row_value(row, "price")
-            if col in [4, 6]: self.recalculate_row_value(row, "volume")
+            if valid:
+                if col == 3:  # Начальная цена (оставляем пробел-разделитель и 2 знака)
+                    formatted = f"{value:,.2f}".replace(',', ' ').replace('.', ',')
+                    # Если после запятой только нули, можно убрать их и тут, но в деньгах обычно оставляют
+                    # Если все же нужно убрать:
+                    if formatted.endswith(',00'): formatted = formatted[:-3]
+                    item.setText(formatted)
+                else:
+                    # Для всех остальных (Объем, %) используем чистый формат без ,0
+                    item.setText(format_num(value))
+
+            self.recalculate_row_value(row, "price" if col in [3, 5] else "volume")
 
         except ValueError:
-            self.show_error_message(param_name, is_percent, default_val)
-            self.table.blockSignals(True)
-            item.setText(default_val)
-            self.table.blockSignals(False)
+            self.show_error_message(param_name, "положительное число", format_num(default_val_raw))
+            item.setText(format_num(default_val_raw))
+
+        self.table.blockSignals(False)
+    def show_error_message(self, param_name, rules, default_val):
+        """Обновленное окно ошибки с указанием правил"""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Ошибка ввода")
+        # Используем шрифт Times New Roman, если он уже объявлен в классе,
+        # либо создаем локально для окна ошибки
+        error_font = QFont("Times New Roman", 12)
+        msg.setFont(error_font)
+
+        error_text = (
+            f"Параметр <b>{param_name}</b> указан некорректно.<br><br>"
+            f"Допустимый диапазон: <b>{rules}</b>.<br>"
+            f"Буквы и символы не допускаются.<br><br>"
+            f"Восстановлено значение: <b>{default_val}</b>"
+        )
+
+        msg.setText(error_text)
+        msg.setStyleSheet("""
+            QMessageBox QLabel { 
+                color: #333333; 
+                min-width: 450px; 
+            }
+            QPushButton { 
+                font-family: 'Times New Roman'; 
+                font-size: 14px; 
+                min-width: 100px; 
+                padding: 6px; 
+                background-color: #E0F7FF;
+                border: 2px solid #87CEFA;
+                border-radius: 8px;
+                color: #0066CC;
+            }
+            QPushButton:hover { background-color: #B9D9EB; }
+        """)
+        msg.exec()
 
     def recalculate_row_value(self, row, mode):
         self.table.blockSignals(True)
@@ -252,20 +314,17 @@ class RevenueParametersWidget(QFrame):
         self.products_changed.emit(names)
 
     def set_apply_btn_style(self, state):
+        # Базовый шрифт
+        font_style = "font-size: 12pt; font-family: 'Times New Roman';"
+
         styles = {
-            "default": "background-color: #E0F7FF; color: #2C3E50; border-radius: 8px; font-weight: bold;",
-            "success": "background-color: #C8E6C9; color: #2E7D32; border-radius: 8px; font-weight: bold;",
-            "warning": "background-color: #FFF9C4; color: #827717; border-radius: 8px; font-weight: bold;"
+            # Добавлена обводка border: 1px solid ...
+            "default": f"{font_style} background-color: #E0F7FF; color: #2C3E50; border-radius: 8px; font-weight: bold; border: 1px solid #B0D4E3;",
+            "success": f"{font_style} background-color: #C8E6C9; color: #2E7D32; border-radius: 8px; font-weight: bold; border: 1px solid #A5D6A7;",
+            "warning": f"{font_style} background-color: #FFF9C4; color: #827717; border-radius: 8px; font-weight: bold; border: 1px solid #FFF176;"
         }
         self.apply_btn.setStyleSheet(styles.get(state, styles["default"]))
-
     def reset_button(self):
         self.apply_btn.setText("Принять данные")
         self.set_apply_btn_style("default")
 
-    def show_error_message(self, param_name, is_percent, default_val):
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Ошибка ввода")
-        msg.setText(f"Параметр: <b>{param_name}</b><br>Введите корректное число.<br>Восстановлено: {default_val}")
-        msg.setStyleSheet("QMessageBox QLabel { min-width: 400px; }")
-        msg.exec()

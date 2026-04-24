@@ -42,8 +42,8 @@ class InflationWidget(QFrame):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # Заголовок
-        title = QLabel("Макроэкономические показатели")
+        # Заголовок("Макроэкономические показатели")
+        title = QLabel("Инфляция по годам", self)
         title.setFont(self.title_font)
         title.setStyleSheet("background-color: transparent; border: none; color: #333333;")
         layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignCenter)
