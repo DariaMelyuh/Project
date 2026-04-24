@@ -62,7 +62,7 @@ class CAPMWidget(QFrame):
 
         # 2. ИСПОЛЬЗУЕМ current_val вместо default_val для текста поля
         le = QLineEdit(str(current_val).replace('.', ','))
-
+        le.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         le.setValidator(self.num_validator)
         le.setFont(self.input_font)
         le.setMinimumWidth(80)
