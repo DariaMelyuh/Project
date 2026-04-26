@@ -14,23 +14,59 @@ from PyQt6.QtWidgets import (
 class FinancialCashFlowWidget(QFrame):
     def __init__(self):
         super().__init__()
+
+        self.font_title = QFont("Times New Roman", 16, QFont.Weight.Bold)
+        self.font_tnr_bold = QFont("Times New Roman", 12, QFont.Weight.Bold)
+        self.font_tnr_regular = QFont("Times New Roman", 12)
+
         self.setObjectName("FCFContainer")
+        # 5) Скругление 12px и основной стиль
         self.setStyleSheet(
-            "QFrame#FCFContainer { background-color: white; border: 1px solid #D0E6F5; border-radius: 15px; }"
+            "QFrame#FCFContainer { background-color: white; border: 1px solid #D0E6F5; border-radius: 12px; }"
         )
 
         layout = QVBoxLayout(self)
-        self.title = QLabel("Финансовый денежный поток (по годам)")
-        self.title.setFont(QFont("Times New Roman", 14, QFont.Weight.Bold))
+        # 5) Уменьшаем нижний отступ до 5, чтобы убрать лишнее место внизу
+        layout.setContentsMargins(25, 20, 25, 20)
+        layout.setSpacing(15)
+
+        self.title = QLabel("Финансовый денежный поток")
+        self.title.setFont(self.font_title)  # Название 16 шрифтом
+        # 3) Убираем фон у названия (background: transparent)
+        self.title.setStyleSheet("color: #2C3E50; border: none; background: transparent;")
         layout.addWidget(self.title)
 
         self.table = QTableWidget()
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.table.setShowGrid(True)
+
+        # Отключаем скроллбары, чтобы не создавали "щелей"
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        # Стилизация таблицы согласно общему стилю
         self.table.setStyleSheet(
             """
-            QTableWidget { gridline-color: #E1EFF8; border: none; font-family: 'Times New Roman'; font-size: 11pt; }
-            QHeaderView::section { background-color: #D0E6F5; font-weight: bold; border: 1px solid #D0E6F5; height: 35px; }
+            QTableWidget { 
+                gridline-color: #E1EFF8; 
+                border: 1px solid #E1EFF8; 
+                background-color: #FFFFFF; 
+                font-family: 'Times New Roman'; 
+                font-size: 12pt; 
+                outline: none;
+            }
+            QHeaderView::section { 
+                background-color: #D0E6F5; 
+                color: #2C3E50;
+                padding: 5px;
+                font-family: 'Times New Roman';
+                font-size: 12pt;
+                font-weight: bold; 
+                border: 1px solid #D0E6F5; 
+            }
             """
         )
         layout.addWidget(self.table)
@@ -55,8 +91,13 @@ class FinancialCashFlowWidget(QFrame):
 
         self.table.setColumnCount(len(years) + 2)
         self.table.setRowCount(len(indicators))
-        self.table.setHorizontalHeaderLabels(["Показатель", "Итого"] + [str(year) for year in years])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setHorizontalHeaderLabels(["Показатель,руб", "Итого,руб"] + [str(year) for year in years])
+
+        # 4) Расширяем первый столбец за счет уменьшения остальных
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)  # По тексту
+        for i in range(1, self.table.columnCount()):
+            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)  # Остальные тянутся
 
         monthly = {i: [0.0] * total_months for i in range(len(indicators))}
 
@@ -74,32 +115,47 @@ class FinancialCashFlowWidget(QFrame):
                 monthly[3][m] = net_profit * 0.3
 
             monthly[6][m] = (
-                monthly[0][m]
-                + monthly[1][m]
-                + monthly[2][m]
-                - monthly[3][m]
-                - monthly[4][m]
-                - monthly[5][m]
+                    monthly[0][m]
+                    + monthly[1][m]
+                    + monthly[2][m]
+                    - monthly[3][m]
+                    - monthly[4][m]
+                    - monthly[5][m]
             )
-
-
 
         yearly = self._aggregate_yearly(months_per_year, monthly)
 
         for row_idx, indicator in enumerate(indicators):
-            self.table.setItem(row_idx, 0, QTableWidgetItem(indicator))
+            # Первый столбец: выравнивание по левому краю, жирный шрифт
+            name_item = QTableWidgetItem(indicator)
+            name_item.setFont(self.font_tnr_bold)
+            name_item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(row_idx, 0, name_item)
 
+            # Колонка "Итого": персиковый фон, жирный шрифт
             total_value = self._get_total_value(row_idx, yearly[row_idx])
             total_item = QTableWidgetItem(self.format_money(total_value))
             total_item.setBackground(QColor("#FFDAB9"))
+            total_item.setFont(self.font_tnr_bold)
             total_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            # --- ДОБАВЛЕНО: Проверка на отрицательное число для Итого ---
+            if total_value < 0:
+                total_item.setForeground(QColor("red"))
+
             self.table.setItem(row_idx, 1, total_item)
 
+            # Годовые значения: обычный 12 шрифт
             for col_idx, value in enumerate(yearly[row_idx]):
                 item = QTableWidgetItem(self.format_money(value))
+                item.setFont(self.font_tnr_regular)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.table.setItem(row_idx, col_idx + 2, item)
 
+                # --- ДОБАВЛЕНО: Проверка на отрицательное число для годов ---
+                if value < 0:
+                    item.setForeground(QColor("red"))
+
+                self.table.setItem(row_idx, col_idx + 2, item)
         self.update_height()
 
     def _aggregate_yearly(self, months_per_year, monthly):
@@ -124,5 +180,15 @@ class FinancialCashFlowWidget(QFrame):
         return sum(values)
 
     def update_height(self):
-        height = self.table.horizontalHeader().height() + (self.table.rowCount() * 35) + 20
-        self.table.setFixedHeight(height)
+        # 5) Фиксированная подгонка высоты без лишних зазоров
+        row_count = self.table.rowCount()
+        header_height = 40
+        row_height = 38
+
+        # Точный расчет: заголовок + строки + минимальный запас на границы
+        total_height = header_height + (row_height * row_count) + 2
+
+        self.table.setFixedHeight(total_height)
+        self.table.horizontalHeader().setFixedHeight(header_height)
+        for i in range(row_count):
+            self.table.setRowHeight(i, row_height)

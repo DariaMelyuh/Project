@@ -20,87 +20,122 @@ from PyQt6.QtWidgets import (
 class YearlyResultsWidget(QFrame):
     def __init__(self):
         super().__init__()
+        # Шрифты
+        self.font_title = QFont("Times New Roman", 16, QFont.Weight.Bold)
         self.font_tnr_bold = QFont("Times New Roman", 12, QFont.Weight.Bold)
-        self.font_tnr_regular = QFont("Times New Roman", 11)
+        self.font_tnr_regular = QFont("Times New Roman", 12)
 
         self.setObjectName("YearlyContainer")
         self.setStyleSheet("""
             QFrame#YearlyContainer {
-                background-color: white;
+                background-color: #FFFFFF;
                 border: 1px solid #D0E6F5;
-                border-radius: 15px;
+                border-radius: 12px;
             }
         """)
 
-        # Основной слой
+        # Основной вертикальный слой
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(20, 15, 20, 15)
-        self.main_layout.setSpacing(10)
+        self.main_layout.setContentsMargins(25, 20, 25, 20)
+        self.main_layout.setSpacing(15)
 
-        # 1. Заголовок
-        self.title_label = QLabel("Показатели по годам")
-        self.title_label.setFont(QFont("Times New Roman", 14, QFont.Weight.Bold))
-        self.title_label.setStyleSheet("border: none; color: #333333; background: transparent;")
-        self.main_layout.addWidget(self.title_label)
+        # --- ВЕРХНЯЯ ПАНЕЛЬ (Заголовок + Легенда) ---
+        top_panel_layout = QHBoxLayout()
 
-        # 2. Легенда цветов
-        legend_layout = QHBoxLayout()
-        colors = [("#FFDAB9", "Итого"), ("#E0F7FF", "Заголовки")]
-        for color, text in colors:
-            lbl_clr = QLabel()
-            lbl_clr.setFixedSize(16, 16)
-            lbl_clr.setStyleSheet(f"background-color: {color}; border: 1px solid #C4C4C4; border-radius: 3px;")
-            lbl_txt = QLabel(text)
-            lbl_txt.setFont(QFont("Times New Roman", 10))
-            lbl_txt.setStyleSheet("background: transparent; border: none; color: #555555;")
-            legend_layout.addWidget(lbl_clr)
-            legend_layout.addWidget(lbl_txt)
-            legend_layout.addSpacing(10)
-        legend_layout.addStretch()
-        self.main_layout.addLayout(legend_layout)
+        self.title_label = QLabel("Отчет о прибылях и убытках")
+        self.title_label.setFont(self.font_title)
+        self.title_label.setStyleSheet("color: #2C3E50; border: none; background: transparent;")
+        top_panel_layout.addWidget(self.title_label)
 
-        # 3. Таблица
-        self.table = QTableWidget(0, 0)  # Начинаем с пустой, колонки создаст generate_columns
-        self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)  # Только чтение
+        top_panel_layout.addStretch()
+
+        # Легенда
+        self.legend_container = QFrame()
+        self.legend_container.setStyleSheet("border: none; background: transparent;")
+        legend_layout = QHBoxLayout(self.legend_container)
+        legend_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Описание цветов
+        legend_items = [
+            ("#D0E6F5", "Шапка"),
+            ("#FFFFFF", "Расчетные данные"),
+            ("#FFDAB9", "Результат проекта")
+        ]
+
+        for color, text in legend_items:
+            dot = QLabel()
+            dot.setFixedSize(14, 14)
+            dot.setStyleSheet(f"background-color: {color}; border: 1px solid #B0C4DE; border-radius: 3px;")
+
+            lbl = QLabel(text)
+            lbl.setFont(QFont("Times New Roman", 12))  # Установлен шрифт 12
+            lbl.setStyleSheet("color: #555555; margin-right: 15px;")
+
+            legend_layout.addWidget(dot)
+            legend_layout.addWidget(lbl)
+
+        top_panel_layout.addWidget(self.legend_container)
+        self.main_layout.addLayout(top_panel_layout)
+
+        # --- ТАБЛИЦА ---
+        self.table = QTableWidget()
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setShowGrid(True)
 
+        # Стилизация таблицы - убираем лишние рамки и серые пятна
         self.table.setStyleSheet("""
             QTableWidget {
                 gridline-color: #E1EFF8;
-                border: none;
+                border: 1px solid #E1EFF8;
+                background-color: #FFFFFF;
                 font-family: 'Times New Roman';
-                font-size: 11pt;
+                font-size: 12pt;
+                outline: none;
             }
             QHeaderView::section {
                 background-color: #D0E6F5;
+                color: #2C3E50;
+                padding: 5px;
+                font-family: 'Times New Roman';
+                font-size: 12pt;
                 font-weight: bold;
-                border: 1px solid #D0E6F5;
-                height: 35px;
+                border: 1px solid #E1EFF8;
             }
         """)
         self.main_layout.addWidget(self.table)
 
-        # 4. Пружина вниз, чтобы прижать всё к верху
-        self.main_layout.addStretch()
+        # Убрали addStretch(), чтобы таблица не "подпрыгивала" и не создавала артефактов
 
     def update_table_height(self):
-        """Динамически меняет высоту таблицы в зависимости от количества строк"""
+        """Динамически меняет высоту таблицы, исключая пустые строки внизу"""
         row_count = self.table.rowCount()
-        header_height = self.table.horizontalHeader().height()
-        row_height = 35  # стандарт для TNR 11-12
+        header_height = self.table.horizontalHeader().height() or 40
+        row_height = 38
 
-        total_height = header_height + (row_height * row_count) + 5
+        # +2 пикселя запаса, чтобы не появлялся скроллбар
+        total_height = header_height + (row_height * row_count) + 2
         self.table.setFixedHeight(total_height)
+        self.table.horizontalHeader().setFixedHeight(header_height)
         for i in range(row_count):
             self.table.setRowHeight(i, row_height)
+
+    def _create_header_col_item(self, text):
+        """Первая колонка (названия) - теперь без серой заливки"""
+        item = QTableWidgetItem(text)
+        item.setFont(self.font_tnr_bold)
+        # Убрана серая заливка, используем прозрачный/белый
+        item.setBackground(QBrush(Qt.GlobalColor.transparent))
+        item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        return item
 
     def format_money(self, value):
         return f"{value:,.2f}".replace(',', ' ').replace('.', ',')
 
     def generate_columns(self, start_month, start_year, total_months):
         self.table.blockSignals(True)
-
         current_month, current_year = start_month, start_year
         years_list = []
         months_per_year = {}
@@ -115,32 +150,33 @@ class YearlyResultsWidget(QFrame):
                 current_month, current_year = 1, current_year + 1
 
         self.table.setColumnCount(2 + len(years_list))
-        headers = ["Показатель", "Итого"] + [str(y) for y in years_list]
+        headers = ["Показатель, руб", "Итого,руб"] + [str(y) for y in years_list]
         self.table.setHorizontalHeaderLabels(headers)
 
-        # Сбрасываем строки при перегенерации колонок
-        self.table.setRowCount(0)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        for i in range(1, self.table.columnCount()):
+            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
 
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setRowCount(0)
         self.table.blockSignals(False)
         return months_per_year
-
     def update_data(self, months_per_year, products_data, k_scenario,
                     k_scenario_exp, inflation_map, base_opex,
                     seasonal_factors, start_month, sales_capacity_data,
-                    volume_growth_data, price_growth_data,  # Добавлены новые аргументы
+                    volume_growth_data, price_growth_data,
                     capex_data, loan_schedule, tax_rates_map):
 
         indicators = [
-            "1. Выручка, руб",
-            "2. Операционные затраты, руб",
-            "3. EBITDA, руб",
-            "4. Амортизация, руб",
-            "5. EBIT, руб",
-            "6. Проценты по кредиту, руб",
-            "7. EBT (Прибыль до налога), руб",
-            "8. Налог (УСН), руб",
-            "9. Чистая прибыль, руб"
+            "Выручка",
+            "Операционные затраты",
+            "EBITDA",
+            "Амортизация",
+            "EBIT",
+            "Проценты по кредиту",
+            "EBT (Прибыль до налога)",
+            "Налог (УСН)",
+            "Чистая прибыль"
         ]
 
         self.table.blockSignals(True)
@@ -236,10 +272,15 @@ class YearlyResultsWidget(QFrame):
 
         # 4. Отрисовка (без изменений)
         for r in range(len(indicators)):
-            self.table.setItem(r, 0, self._create_bold_item(indicators[r]))
+            # Используем кастомный метод для первой колонки
+            self.table.setItem(r, 0, self._create_header_col_item(indicators[r]))
+
+            # Используем кастомный метод для колонки "Итого"
             self.table.setItem(r, 1, self._create_total_item(sum(yearly_vals[r])))
+
+            # Используем кастомный метод для расчетных лет
             for c, val in enumerate(yearly_vals[r]):
-                self.table.setItem(r, c + 2, QTableWidgetItem(self.format_money(val)))
+                self.table.setItem(r, c + 2, self._create_calc_item(val))
 
         self._apply_alignment()
         self.table.blockSignals(False)
@@ -252,14 +293,59 @@ class YearlyResultsWidget(QFrame):
         item.setBackground(QColor("#F9F9F9"))
         return item
 
-    def _create_total_item(self, value):
-        item = QTableWidgetItem(self.format_money(value))
-        item.setBackground(QColor("#FFDAB9"))
+    def _create_header_col_item(self, text):
+        """Первая колонка (названия) - без номера и по левому краю"""
+        item = QTableWidgetItem(text)
         item.setFont(self.font_tnr_bold)
+        # Прозрачный фон, чтобы не было "серости"
+        item.setBackground(QBrush(Qt.GlobalColor.transparent))
+        # Выравнивание по левому краю и по центру вертикально
+        item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         return item
 
+    def _create_total_item(self, value):
+        """Колонка Итого (Персиковая)"""
+        item = QTableWidgetItem(self.format_money(value))
+        item.setBackground(QBrush(QColor("#FFDAB9")))
+        item.setFont(self.font_tnr_bold)
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Подсветка отрицательного итога
+        if value < 0:
+            item.setForeground(QBrush(QColor("red")))
+
+        return item
+
+    def _create_calc_item(self, value):
+        """Годовые данные (Белые)"""
+        item = QTableWidgetItem(self.format_money(value))
+        item.setFont(self.font_tnr_regular)
+        item.setBackground(QBrush(QColor("#FFFFFF")))
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Если число меньше нуля — красим текст в красный
+        if value < 0:
+            item.setForeground(QBrush(QColor("red")))
+
+        return item
     def _apply_alignment(self):
         for r in range(self.table.rowCount()):
             for c in range(self.table.columnCount()):
                 it = self.table.item(r, c)
-                if it: it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if it:
+                    if c == 0:
+                        # Первую колонку оставляем по левому краю
+                        it.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                    else:
+                        # Остальные — по центру
+                        it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+    def update_table_height(self):
+        row_count = self.table.rowCount()
+        header_height = 40 # Немного увеличим для 12 шрифта
+        row_height = 38
+        total_height = header_height + (row_height * row_count) + 2
+        self.table.setFixedHeight(total_height)
+        self.table.horizontalHeader().setFixedHeight(header_height)
+        for i in range(row_count):
+            self.table.setRowHeight(i, row_height)
