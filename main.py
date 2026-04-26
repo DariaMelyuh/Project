@@ -133,7 +133,7 @@ class MainWindow(QWidget):
         self.fin_cf_widget = FinancialCashFlowWidget()
         self.prediction_cf_widget = PredictionCashFlowWidget()
         self.accumulated_cf_widget = AccumulatedCashFlowWidget()
-        self.efficiency_widget = EfficiencyMetricsWidget()
+        self.efficiency_widget = EfficiencyMetricsWidget(main_window=self)
         self.capm_widget = CAPMWidget(main_window=self)
         self.wacc_widget = WACCWidget(main_window=self)
         self.credit_widget = CreditFundsWidget(self.input_widget)
