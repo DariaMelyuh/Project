@@ -51,25 +51,48 @@ class PredictionCashFlowWidget(QFrame):
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         # Стилизация таблицы согласно общему стилю
+        # Стилизация таблицы с закруглением углов шапки
         self.table.setStyleSheet("""
-            QTableWidget { 
-                gridline-color: #E1EFF8; 
-                border: 1px solid #E1EFF8; 
-                background-color: #FFFFFF; 
-                font-family: 'Times New Roman'; 
-                font-size: 12pt; 
-                outline: none;
-            }
-            QHeaderView::section { 
-                background-color: #D0E6F5; 
-                color: #2C3E50;
-                padding: 5px;
-                font-family: 'Times New Roman';
-                font-size: 12pt;
-                font-weight: bold; 
-                border: 1px solid #D0E6F5; 
-            }
-        """)
+                    QTableWidget {
+                        gridline-color: #E1EFF8;
+                        border: none; /* Убираем внешнюю рамку, так как она есть у контейнера YearlyContainer */
+                        background-color: #FFFFFF;
+                        font-family: 'Times New Roman';
+                        font-size: 12pt;
+                        outline: none;
+                    }
+
+                    /* Контейнер всей шапки */
+                    QHeaderView {
+                        background-color: transparent;
+                        border-top-left-radius: 12px;
+                        border-top-right-radius: 12px;
+                    }
+
+                    /* Общие стили для всех ячеек шапки */
+                    QHeaderView::section {
+                        background-color: #D0E6F5;
+                        color: #2C3E50;
+                        padding: 5px;
+                        font-family: 'Times New Roman';
+                        font-size: 12pt;
+                        font-weight: bold;
+                        border: none;
+                        border-right: 1px solid #E1EFF8;
+                        border-bottom: 1px solid #E1EFF8;
+                    }
+
+                    /* Скругление левого верхнего угла первой колонки */
+                    QHeaderView::section:horizontal:first {
+                        border-top-left-radius: 12px;
+                    }
+
+                    /* Скругление правого верхнего угла последней колонки */
+                    QHeaderView::section:horizontal:last {
+                        border-top-right-radius: 12px;
+                        border-right: none; /* Убираем лишнюю полоску справа */
+                    }
+                """)
         layout.addWidget(self.table)
     def format_money(self, value):
         return f"{value:,.2f}".replace(",", " ").replace(".", ",")
