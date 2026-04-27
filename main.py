@@ -388,8 +388,8 @@ class MainWindow(QWidget):
                        self.input_widget.hor_le.textChanged]:  # Важно добавить hor_le
             signal.connect(self._on_project_timing_changed)
 
-        self.taxes_widget.data_changed.connect(self.update_wacc_values)
-        self.taxes_widget.data_changed.connect(self.sync_yearly_table)
+        #self.taxes_widget.data_changed.connect(self.update_wacc_values)
+        #self.taxes_widget.data_changed.connect(self.sync_yearly_table)
 
         self.inflation_widget.data_changed.connect(self.sync_yearly_table)
         # WACC расчеты
@@ -428,9 +428,9 @@ class MainWindow(QWidget):
         for le in self.seasonality_widget.inputs:
             le.editingFinished.connect(self.sync_yearly_table)
         # В MainWindow.setup_signals
-        for le in self.monthly_rate_widget.cells.values():
-            le.editingFinished.connect(self.sync_yearly_table)
-        self.monthly_rate_widget.data_confirmed.connect(self.sync_yearly_table)
+        #for le in self.monthly_rate_widget.cells.values():
+            #le.editingFinished.connect(self.sync_yearly_table)
+        #self.monthly_rate_widget.data_confirmed.connect(self.sync_yearly_table)
         # Связываем нажатие кнопки в виджете продаж активов с общим расчетом
         self.asset_sales_widget.data_confirmed.connect(self.sync_yearly_table)
         self.monthly_rate_widget.data_confirmed.connect(self.sync_yearly_table)
@@ -662,6 +662,7 @@ class MainWindow(QWidget):
         }
 
     def sync_yearly_table(self):
+        print("SYNC CALLED")
         try:
             if not hasattr(self, 'op_cf_widget') or not hasattr(self, 'yearly_results'):
                 return
