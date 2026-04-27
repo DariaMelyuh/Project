@@ -12,6 +12,7 @@ from PyQt6.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+
 class EfficiencyMetricsWidget(QWidget):
     def __init__(self, main_window=None):
         super().__init__()
@@ -54,12 +55,12 @@ class EfficiencyMetricsWidget(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # Чтобы не обрезалось заключение
 
         # Фиксируем высоту, но даем ширине подстроиться
-        self.table.setFixedHeight(290)  # Немного увеличим, чтобы влезли все 8 строк без скролла
+        self.table.setFixedHeight(300)  # Немного увеличим, чтобы влезли все 8 строк без скролла
 
         # --- ВАЖНЫЙ МОМЕНТ: Расчет точной ширины ---
         # Вычисляем сумму ширин всех колонок + небольшой запас на рамки
         self.table.setMinimumWidth(
-            header.length() + self.table.verticalHeader().width() + 399
+            header.length() + self.table.verticalHeader().width() + 403
         )
 
         # Позволяем контейнеру сжиматься до размеров таблицы
@@ -88,7 +89,7 @@ class EfficiencyMetricsWidget(QWidget):
                         border-radius: 11px;
                         /* Убираем выбор цвета фона здесь, чтобы работал программный код */
                     }
-                   
+
 
                     QHeaderView::section {
                         background-color: #D0E6F5;
@@ -161,7 +162,7 @@ class EfficiencyMetricsWidget(QWidget):
         # 4. Область графиков
         self.figure = Figure(figsize=(12, 14), dpi=100)
         self.canvas = FigureCanvas(self.figure)
-        self.canvas.setMinimumHeight(1200)
+        self.canvas.setMinimumHeight(2000)
         self.canvas.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
         self.canvas.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.canvas.setVisible(False)
@@ -202,6 +203,7 @@ class EfficiencyMetricsWidget(QWidget):
             "warning": f"{font_style} background-color: #FFF9C4; color: #827717; border-radius: 10px; font-weight: bold; border: 2px solid #FFF176;"
         }
         self.draw_btn.setStyleSheet(styles.get(state, styles["default"]))
+
     def _fill_row(self, row, val, comment, is_good):
         """
         Финальная настройка: максимально светлый и свежий зеленый,
@@ -253,7 +255,8 @@ class EfficiencyMetricsWidget(QWidget):
                     item.setForeground(comm_text_color)
                 else:
                     # Название (первая колонка) - оставляем строгим
-                    item.setForeground(QColor("#2C3E50")) # Название показателя
+                    item.setForeground(QColor("#2C3E50"))  # Название показателя
+
     def _setup_ui_additional(self):
         # Вспомогательный метод для кнопки и холста, чтобы не загромождать init
         btn_layout = QHBoxLayout()
@@ -326,7 +329,7 @@ class EfficiencyMetricsWidget(QWidget):
         print(f"DEBUG ARR: Статус = {'OK' if is_arr_ok else 'LOW'}")
         print("-" * 30)
 
-        status_text = "выше нормы" if is_arr_ok else "ниже нормы"
+        status_text = "Выше нормы" if is_arr_ok else "Ниже нормы"
         comment = f"Доходность {status_text} ({effective_rate:.1%})"
         self._fill_row(0, f"{arr:.1%}", comment, is_arr_ok)
 
@@ -346,7 +349,8 @@ class EfficiencyMetricsWidget(QWidget):
         except:
             pass
         is_irr_ok = irr_annual >= effective_rate
-        self._fill_row(2, f"{irr_annual:.1%}", f"Выше {effective_rate:.1%}" if is_irr_ok else f"Ниже {effective_rate:.1%}",
+        self._fill_row(2, f"{irr_annual:.1%}",
+                       f"Выше {effective_rate:.1%}" if is_irr_ok else f"Ниже {effective_rate:.1%}",
                        is_irr_ok)
 
         # --- 4 & 6. PP (Месяцы и Годы) ---
@@ -369,6 +373,7 @@ class EfficiencyMetricsWidget(QWidget):
         pi = sum(discounted_cf_monthly) / investments if investments > 0 else 0
         is_pi_ok = pi >= 1.0
         self._fill_row(5, f"{pi:.2f}", "Эффективен" if is_pi_ok else "Неэффективен", is_pi_ok)
+        self.last_net_profit = net_profit_monthly
         # В самом конце метода:
         if self.charts_drawn_once:
             self.charts_need_update = True
@@ -378,6 +383,7 @@ class EfficiencyMetricsWidget(QWidget):
             self.charts_need_update = False
             self.draw_btn.setText("Графики")
             self.set_draw_btn_style("default")
+
     def _create_info_panel(self):
         panel = QFrame()
         panel.setObjectName("infoPanel")
@@ -497,109 +503,106 @@ class EfficiencyMetricsWidget(QWidget):
 
     def _draw_charts(self, cf, dcf, revenue_monthly):
         self.figure.clear()
-        font_style = {'fontname': 'Times New Roman', 'size': 12}
         investments = getattr(self, 'last_investments', 0)
         start_month = getattr(self, 'last_start_month', 1)
+        net_profit = getattr(self, 'last_net_profit', [])
 
-        # --- Подготовка данных (без изменений) ---
+        # --- Подготовка данных ---
         cf_yearly, dcf_yearly = [], []
         first_year_end = 13 - start_month
         cf_yearly.append(sum(cf[:first_year_end]))
         dcf_yearly.append(sum(dcf[:first_year_end]))
-        remaining_cf, remaining_dcf = cf[first_year_end:], dcf[first_year_end:]
+        np_yearly = []
+        np_yearly.append(sum(net_profit[:first_year_end]))
+
+        remaining_cf, remaining_dcf, remaining_np = cf[first_year_end:], dcf[first_year_end:], net_profit[
+            first_year_end:]
         for i in range(0, len(remaining_cf), 12):
             cf_yearly.append(sum(remaining_cf[i:i + 12]))
             dcf_yearly.append(sum(remaining_dcf[i:i + 12]))
+            np_yearly.append(sum(remaining_np[i:i + 12]))
 
         num_years = len(cf_yearly)
         years_range = np.arange(1, num_years + 1)
         cum_cf_yearly, cum_dcf_yearly = [-investments], [-investments]
         c_cf, c_dcf = -investments, -investments
         for i in range(num_years):
-            c_cf += cf_yearly[i];
+            c_cf += cf_yearly[i]
             c_dcf += dcf_yearly[i]
-            cum_cf_yearly.append(c_cf);
+            cum_cf_yearly.append(c_cf)
             cum_dcf_yearly.append(c_dcf)
         years_with_zero = np.arange(0, num_years + 1)
 
-        # --- ОТРИСОВКА ---
         font_name = 'Times New Roman'
         font_size = 12
-
-        # 1. Чистый денежный поток (Бары)
-        ax1 = self.figure.add_subplot(311)
+        title_pad = 50
         width = 0.35
-        ax1.bar(years_range - width / 2, cf_yearly, width, label='Свободный ДП', color=self.color_cf)
-        ax1.bar(years_range + width / 2, dcf_yearly, width, label='Дисконт. ДП', color=self.color_dcf)
 
-        ax1.set_title("1. Чистый денежный поток (по календарным годам)", fontname=font_name, fontsize=13,
-                      fontweight='bold', pad=15)
-        ax1.set_xlabel("Год проекта", fontname=font_name, fontsize=font_size)
-        ax1.set_ylabel("Поток, руб", fontname=font_name, fontsize=font_size)
-        ax1.set_xticks(years_range)
-        ax1.legend(frameon=False, prop={'family': font_name, 'size': font_size})
-        ax1.grid(True, linestyle='--', alpha=0.4, axis='y')  # Сетка
+        # --- 1. ЧИСТАЯ ПРИБЫЛЬ ---
+        ax1 = self.figure.add_subplot(411)
+        ax1.plot(years_range, np_yearly, 'D-', color='#43A047', linewidth=2.5, label='Чистая прибыль')
+        ax1.fill_between(years_range, np_yearly, 0, where=(np.array(np_yearly) >= 0),
+                         interpolate=True, color='#43A047', alpha=0.1)
+        ax1.fill_between(years_range, np_yearly, 0, where=(np.array(np_yearly) < 0),
+                         interpolate=True, color='#E53935', alpha=0.1)
+        ax1.axhline(0, color='black', linewidth=0.8, alpha=0.3)
+        ax1.set_title("1. Чистая прибыль по годам", fontname=font_name, fontsize=13, fontweight='bold', pad=title_pad)
 
-        # 2. Кумулятивный поток (Линии)
-        ax2 = self.figure.add_subplot(312)
-        ax2.plot(years_with_zero, cum_cf_yearly, 'o-', color=self.color_cf, linewidth=2, label='Накопленный СДП')
-        ax2.plot(years_with_zero, cum_dcf_yearly, 's-', color=self.color_dcf, linewidth=2, label='Накопленный ДДП')
+        for x, y in zip(years_range, np_yearly):
+            text_color = '#E53935' if y < 0 else '#2E7D32'
+            ax1.annotate(f'{y:,.0f}'.replace(',', ' '), (x, y), textcoords="offset points",
+                         xytext=(0, 10 if y >= 0 else -22), ha='center', fontname=font_name,
+                         fontsize=font_size, color=text_color, fontweight='bold')
 
-        # Умные подписи точек для AX2
+        # --- 2. ЧИСТЫЙ ДЕНЕЖНЫЙ ПОТОК (ГИСТОГРАММА) ---
+        ax2 = self.figure.add_subplot(412)
+        ax2.bar(years_range - width / 2, cf_yearly, width, label='Свободный ДП', color=self.color_cf)
+        ax2.bar(years_range + width / 2, dcf_yearly, width, label='Дисконт. ДП', color=self.color_dcf)
+        ax2.set_title("2. Чистый денежный поток", fontname=font_name, fontsize=13, fontweight='bold', pad=title_pad)
+        self._add_bar_labels(ax2)
+
+        # --- 3. СРАВНЕНИЕ НАКОПЛЕННЫХ ПОТОКОВ (ГИСТОГРАММА) ---
+        ax3 = self.figure.add_subplot(413)
+        ax3.bar(years_with_zero - width / 2, cum_cf_yearly, width, color=self.color_cf, label='СДП (накопл.)')
+        ax3.bar(years_with_zero + width / 2, cum_dcf_yearly, width, color=self.color_dcf, label='ДДП (накопл.)')
+        ax3.set_title("3. Сравнение накопленных потоков", fontname=font_name, fontsize=13, fontweight='bold',
+                      pad=title_pad)
+        self._add_bar_labels(ax3)
+
+        # --- 4. КУМУЛЯТИВНЫЙ ДЕНЕЖНЫЙ ПОТОК (ЛИНЕЙНЫЙ) ---
+        ax4 = self.figure.add_subplot(414)
+        ax4.plot(years_with_zero, cum_cf_yearly, 'o-', color=self.color_cf, linewidth=2, label='Накопленный СДП')
+        ax4.plot(years_with_zero, cum_dcf_yearly, 's-', color=self.color_dcf, linewidth=2, label='Накопленный ДДП')
+        ax4.axhline(0, color='#E53935', linestyle='--', alpha=0.6)
+        ax4.set_title("4. Кумулятивный денежный поток", fontname=font_name, fontsize=13, fontweight='bold',
+                      pad=title_pad)
+
         for x, y_cf, y_dcf in zip(years_with_zero, cum_cf_yearly, cum_dcf_yearly):
             offset_cf = 12 if y_cf >= y_dcf else -20
             offset_dcf = -20 if y_cf >= y_dcf else 12
+            ax4.annotate(f'{y_cf:,.0f}'.replace(',', ' '), (x, y_cf), textcoords="offset points",
+                         xytext=(0, offset_cf), ha='center', fontname=font_name, fontsize=11,
+                         color='#2C3E50', fontweight='bold')
+            ax4.annotate(f'{y_dcf:,.0f}'.replace(',', ' '), (x, y_dcf), textcoords="offset points",
+                         xytext=(0, offset_dcf), ha='center', fontname=font_name, fontsize=11, color='#7F8C8D')
 
-            ax2.annotate(f'{y_cf:,.0f}'.replace(',', ' '), (x, y_cf), textcoords="offset points",
-                         xytext=(0, offset_cf), ha='center', fontname=font_name, fontsize=10, color='#2C3E50',
-                         fontweight='bold')
-            ax2.annotate(f'{y_dcf:,.0f}'.replace(',', ' '), (x, y_dcf), textcoords="offset points",
-                         xytext=(0, offset_dcf), ha='center', fontname=font_name, fontsize=10, color='#7F8C8D')
+        # Общая настройка
+        for ax in [ax1, ax2, ax3, ax4]:
+            ax.set_xlabel("Год", fontname=font_name, fontsize=font_size)
+            ax.set_ylabel("Руб", fontname=font_name, fontsize=font_size)
+            ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.02), ncol=2, frameon=False,
+                      prop={'family': font_name, 'size': font_size})
 
-        ax2.axhline(0, color='#E53935', linestyle='--', alpha=0.6)
-        ax2.set_title("2. Кумулятивный денежный поток (линейный)", fontname=font_name, fontsize=13, fontweight='bold',
-                      pad=15)
-        ax2.set_xlabel("Год", fontname=font_name, fontsize=font_size)
-        ax2.set_ylabel("Накопленный итог, руб", fontname=font_name, fontsize=font_size)
-        ax2.set_xticks(years_with_zero)
-        ax2.legend(frameon=False, prop={'family': font_name, 'size': font_size})  # Легенда
-        ax2.grid(True, linestyle='--', alpha=0.4)  # Сетка
-
-        # 3. Кумулятивный поток (Бары)
-        ax4 = self.figure.add_subplot(313)
-        ax4.bar(years_with_zero - width / 2, cum_cf_yearly, width, color=self.color_cf, label='СДП (накопл.)')
-        ax4.bar(years_with_zero + width / 2, cum_dcf_yearly, width, color=self.color_dcf, label='ДДП (накопл.)')
-        ax4.set_title("3. Сравнение накопленных потоков (гистограмма)", fontname=font_name, fontsize=13,
-                      fontweight='bold', pad=15)
-        ax4.set_xlabel("Год", fontname=font_name, fontsize=font_size)
-        ax4.set_ylabel("Руб", fontname=font_name, fontsize=font_size)
-        ax4.set_xticks(years_with_zero)
-        ax4.legend(frameon=False, prop={'family': font_name, 'size': font_size})
-        ax4.grid(True, linestyle='--', alpha=0.4, axis='y')
-
-        # 4. NPV Profile
-
-
-        # Финальная настройка всех осей (Шрифты чисел и удаление рамок)
-        for ax in [ax1, ax2, ax4]:
             for label in (ax.get_xticklabels() + ax.get_yticklabels()):
                 label.set_fontname(font_name)
                 label.set_fontsize(font_size)
+
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
+            ax.grid(True, linestyle='--', alpha=0.4)
 
-        self._add_bar_labels(ax1)
-        self._add_bar_labels(ax4)
-
-        self.figure.tight_layout(pad=4.0)
+        self.figure.tight_layout(pad=5.0, h_pad=6.0)
         self.canvas.draw()
-
-    def _add_line_labels(self, ax, x_data, y_data, color):
-        for x, y in zip(x_data, y_data):
-            ax.annotate(f'{y:,.0f}'.replace(',', ' '), (x, y),
-                         textcoords="offset points", xytext=(0, 10), ha='center', fontsize=8, color=color, fontweight='bold')
-
-
     def _add_bar_labels(self, ax):
         for rect in ax.patches:
             height = rect.get_height()
@@ -612,6 +615,7 @@ class EfficiencyMetricsWidget(QWidget):
                         # Добавляем параметры шрифта здесь:
                         fontname='Times New Roman',
                         fontsize=12)
+
     def _calc_payback(self, cash_flows, investment):
         cumulative = -investment
         for i, cf in enumerate(cash_flows):
