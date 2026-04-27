@@ -3,10 +3,10 @@ import numpy_financial as npf
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QTableWidget,
     QTableWidgetItem, QHeaderView, QScrollArea, QWidget, QFrame,
-    QSizePolicy, QPushButton
+    QSizePolicy, QPushButton, QGridLayout  # <--- ДОБАВЬТЕ ЭТОТ КЛАСС
 )
 from PyQt6.QtGui import QFont, QColor
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 
 # Импорты для графиков
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -22,11 +22,11 @@ class EfficiencyMetricsWidget(QWidget):
         self.last_investments = 0
         self.last_discount_rate = 0.15
         self.last_months_struct = {}
-
+        self.charts_drawn_once = False
         # Основной лейаут
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(10, 10, 10, 10)
-        self.main_layout.setSpacing(25)
+        self.main_layout.setContentsMargins(8, 8, 8, 8)
+        self.main_layout.setSpacing(15)
 
         # 1. Заголовок
         self.title = QLabel("Показатели эффективности инвестиционного проекта")
@@ -37,25 +37,33 @@ class EfficiencyMetricsWidget(QWidget):
         # 2. Таблица
         # --- ТАБЛИЦА ---
         # --- ТАБЛИЦА С СОВРЕМЕННЫМ ДИЗАЙНОМ ---
+        # --- ТАБЛИЦА С СОВРЕМЕННЫМ ДИЗАЙНОМ ---
+        # --- ТАБЛИЦА С СОВРЕМЕННЫМ ДИЗАЙНОМ ---
         self.table_container_frame = QFrame()
         self.table_container_frame.setObjectName("modernTableFrame")
 
         self.table = QTableWidget(8, 3)
         self.table.verticalHeader().setVisible(False)
         self.table.setHorizontalHeaderLabels(["Наименование показателя", "Значение", "Заключение"])
-        self.table.setShowGrid(False)  # Убираем стандартную сетку для чистого вида
+        self.table.setShowGrid(False)
 
+        # Настройка заголовков
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)  # Растягиваем последнюю колонку
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # Чтобы не обрезалось заключение
 
-        self.table.setFixedHeight(300)
-        self.table.setSizeAdjustPolicy(QTableWidget.SizeAdjustPolicy.AdjustToContents)
+        # Фиксируем высоту, но даем ширине подстроиться
+        self.table.setFixedHeight(290)  # Немного увеличим, чтобы влезли все 8 строк без скролла
 
-        # Рассчитываем ширину (подберите число под ваш контент)
-        self.table_container_frame.setFixedWidth(850)
+        # --- ВАЖНЫЙ МОМЕНТ: Расчет точной ширины ---
+        # Вычисляем сумму ширин всех колонок + небольшой запас на рамки
+        self.table.setMinimumWidth(
+            header.length() + self.table.verticalHeader().width() + 399
+        )
 
+        # Позволяем контейнеру сжиматься до размеров таблицы
+        self.table_container_frame.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         # Размещаем таблицу внутри фрейма
         frame_layout = QVBoxLayout(self.table_container_frame)
         frame_layout.setContentsMargins(2, 2, 2, 2)
@@ -77,8 +85,10 @@ class EfficiencyMetricsWidget(QWidget):
                         border: none;
                         font-family: 'Times New Roman';
                         font-size: 12pt;
+                        border-radius: 11px;
                         /* Убираем выбор цвета фона здесь, чтобы работал программный код */
                     }
+                   
 
                     QHeaderView::section {
                         background-color: #D0E6F5;
@@ -110,15 +120,28 @@ class EfficiencyMetricsWidget(QWidget):
                     }
                 """)
         # Оборачиваем всё в горизонтальный лейаут для выравнивания
-        table_outer_layout = QHBoxLayout()
-        table_outer_layout.addWidget(self.table_container_frame)
-        table_outer_layout.addStretch()
+        # --- НОВЫЙ ГОРИЗОНТАЛЬНЫЙ КОНТЕЙНЕР ДЛЯ ТАБЛИЦЫ И СПРАВКИ ---
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(10)
 
-        self.main_layout.addLayout(table_outer_layout)
+        # Добавляем таблицу (фрейм, который вы уже создали)
+        content_layout.addWidget(self.table_container_frame)
+
+        # Добавляем панель справки
+        self.info_panel = self._create_info_panel()
+        content_layout.addWidget(self.info_panel)
+
+        content_layout.addStretch()  # Чтобы все не разъезжалось
+
+        # Вместо старого table_outer_layout добавляем новый content_layout в main_layout
+        self.main_layout.addLayout(content_layout)
         self._setup_static_names()
         # 3. Кнопка
         btn_layout = QHBoxLayout()
         self.draw_btn = QPushButton("Графики")
+
+        self.charts_need_update = False
+        self.set_draw_btn_style("default")
         self.draw_btn.setMinimumSize(200, 50)
         self.draw_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.draw_btn.setStyleSheet("""
@@ -139,6 +162,7 @@ class EfficiencyMetricsWidget(QWidget):
         self.figure = Figure(figsize=(12, 14), dpi=100)
         self.canvas = FigureCanvas(self.figure)
         self.canvas.setMinimumHeight(1200)
+        self.canvas.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
         self.canvas.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.canvas.setVisible(False)
         self.main_layout.addWidget(self.canvas)
@@ -155,7 +179,7 @@ class EfficiencyMetricsWidget(QWidget):
             "Внутренняя ставка доходности (IRR), %",
             "Срок окупаемости (PP), мес",
             "Дисконтированный срок окупаемости (DPP), мес",
-            "Эффективность проекта (PI), ед",
+            "Индекс доходности (PI), ед",
             "Срок окупаемости (PP), год",
             "Дисконтированный срок окупаемости (DPP), год"
         ]
@@ -166,6 +190,18 @@ class EfficiencyMetricsWidget(QWidget):
             item.setForeground(QColor("#1E293B"))
             self.table.setItem(i, 0, item)
 
+    def set_draw_btn_style(self, state):
+        font_style = "font-size: 12pt; font-family: 'Times New Roman';"
+
+        styles = {
+            # Синяя (обычное состояние)
+            "default": f"{font_style} background-color: #E0F7FF; color: #002B5B; border-radius: 10px; font-weight: bold; border: 2px solid #87CEFA;",
+            # Зеленая (графики только что отрисованы)
+            "success": f"{font_style} background-color: #C8E6C9; color: #2E7D32; border-radius: 10px; font-weight: bold; border: 2px solid #A5D6A7;",
+            # Желтая (данные изменились, нужно нажать для обновления графика)
+            "warning": f"{font_style} background-color: #FFF9C4; color: #827717; border-radius: 10px; font-weight: bold; border: 2px solid #FFF176;"
+        }
+        self.draw_btn.setStyleSheet(styles.get(state, styles["default"]))
     def _fill_row(self, row, val, comment, is_good):
         """
         Финальная настройка: максимально светлый и свежий зеленый,
@@ -333,14 +369,131 @@ class EfficiencyMetricsWidget(QWidget):
         pi = sum(discounted_cf_monthly) / investments if investments > 0 else 0
         is_pi_ok = pi >= 1.0
         self._fill_row(5, f"{pi:.2f}", "Эффективен" if is_pi_ok else "Неэффективен", is_pi_ok)
+        # В самом конце метода:
+        if self.charts_drawn_once:
+            self.charts_need_update = True
+            self.draw_btn.setText("Обновить графики *")
+            self.set_draw_btn_style("warning")
+        else:
+            self.charts_need_update = False
+            self.draw_btn.setText("Графики")
+            self.set_draw_btn_style("default")
+    def _create_info_panel(self):
+        panel = QFrame()
+        panel.setObjectName("infoPanel")
+        panel.setFixedWidth(710)
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(15, 20, 15, 20)
+        layout.setSpacing(15)
+
+        header = QLabel("Описание")
+        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header.setStyleSheet(
+            "font-family: 'Times New Roman'; font-size: 14pt; font-weight: bold; color: #002B5B; background: transparent;")
+        layout.addWidget(header)
+
+        grid_layout = QGridLayout()
+        grid_layout.setSpacing(20)
+
+        def create_item_widget(title, pos_text, neg_text):
+            container = QWidget()
+            container.setStyleSheet("background: transparent;")
+            item_layout = QVBoxLayout(container)
+            item_layout.setContentsMargins(0, 0, 0, 0)
+            item_layout.setSpacing(5)
+
+            base_style = "font-family: 'Times New Roman'; font-size: 11pt; background: transparent; border: none; padding: 0px;"
+
+            t_label = QLabel(title)
+            t_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            t_label.setStyleSheet(base_style + "font-weight: bold; color: #002B5B;")
+
+            pos_label = QLabel(f"• {pos_text}")
+            pos_label.setWordWrap(True)
+            pos_label.setStyleSheet(base_style + "color: #2E7D32;")
+
+            neg_label = QLabel(f"• {neg_text}")
+            neg_label.setWordWrap(True)
+            neg_label.setStyleSheet(base_style + "color: #C62828;")
+
+            item_layout.addWidget(t_label)
+            item_layout.addWidget(pos_label)
+            item_layout.addWidget(neg_label)
+            return container
+
+        # --- Наполнение сетки (3 строки, 2 колонки) ---
+
+        # Строка 0
+        grid_layout.addWidget(create_item_widget(
+            "ARR",
+            "ARR > WACC ➡  Доходность выше требуемой нормы",
+            "ARR < WACC ➡  Прибыль не покрывает объем вложений"
+        ), 0, 0)
+
+        grid_layout.addWidget(create_item_widget(
+            "NPV",
+            "NPV > 0 ➡ Средства покрывают инвестиции и риски",
+            "NPV < 0 ➡ Доходы ниже суммы затрат"
+        ), 0, 1)
+
+        # Строка 1
+        grid_layout.addWidget(create_item_widget(
+            "IRR",
+            "IRR > WACC ➡ Проект устойчив к стоимости капитала",
+            "IRR < WACC ➡ Риск превышает внутреннюю доходность"
+        ), 1, 0)
+
+        grid_layout.addWidget(create_item_widget(
+            "PI",
+            "PI > 1 ➡ Каждый рубль приносит чистую прибыль",
+            "PI < 1 ➡ На каждый рубль зафиксирован убыток"
+        ), 1, 1)
+
+        # Строка 2 (НОВЫЕ ПОКАЗАТЕЛИ)
+        grid_layout.addWidget(create_item_widget(
+            "PP",
+            "PP < цели ➡ Инвестиции возвращаются в срок",
+            "PP > цели ➡ Слишком медленный возврат капитала"
+        ), 2, 0)
+
+        grid_layout.addWidget(create_item_widget(
+            "DPP",
+            "DPP < срока ➡ Окупаемость с учетом обесценения денег",
+            "DPP > срока ➡ Проект не окупается в реальных ценах"
+        ), 2, 1)
+
+        layout.addLayout(grid_layout)
+        layout.addStretch()
+
+        panel.setStyleSheet("""
+            #infoPanel {
+                background-color: #FFFFFF;
+                border: 1px solid #D0E6F5;
+                border-radius: 15px;
+            }
+            #infoPanel QLabel {
+                background-color: transparent; 
+                border: none;
+            }
+        """)
+        return panel
 
     def on_draw_clicked(self):
-        """Метод без обращения к несуществующему self.scroll"""
         if not hasattr(self, 'last_free_cf') or not self.last_free_cf:
             return
 
         self.canvas.setVisible(True)
         self._draw_charts(self.last_free_cf, self.last_dist_cf, self.last_revenue)
+        self.charts_drawn_once = True
+        # Стилизация после нажатия
+        self.charts_need_update = False
+        self.draw_btn.setText("Графики построены ✓")
+
+        self.set_draw_btn_style("success")
+
+        # Через 2 секунды возвращаем текст в норму, но оставляем синей
+        QTimer.singleShot(2000, self.reset_draw_button)
 
     def _draw_charts(self, cf, dcf, revenue_monthly):
         self.figure.clear()
@@ -467,3 +620,9 @@ class EfficiencyMetricsWidget(QWidget):
             if cumulative >= 0:
                 return i + (abs(prev_cum) / cf) if cf != 0 else i
         return None
+
+    def reset_draw_button(self):
+        # Если за эти 2 секунды данные снова не изменились, возвращаем дефолт
+        if not self.charts_need_update:
+            self.draw_btn.setText("Графики")
+            self.set_draw_btn_style("default")
