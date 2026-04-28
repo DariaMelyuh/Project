@@ -134,6 +134,8 @@ class MainWindow(QWidget):
         self.prediction_cf_widget = PredictionCashFlowWidget()
         self.accumulated_cf_widget = AccumulatedCashFlowWidget()
         self.efficiency_widget = EfficiencyMetricsWidget(main_window=self)
+        # Когда в комбобоксе года меняется текст, таблица тут же меняет заголовки
+        self.input_widget.year_cb.currentTextChanged.connect(self.efficiency_widget.on_year_selected)
         self.capm_widget = CAPMWidget(main_window=self)
         self.wacc_widget = WACCWidget(main_window=self)
         self.credit_widget = CreditFundsWidget(self.input_widget)
