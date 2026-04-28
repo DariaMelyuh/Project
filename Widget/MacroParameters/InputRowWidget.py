@@ -1,6 +1,6 @@
 import sys
 import math
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, QDate
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont, QRegularExpressionValidator, QColor, QBrush
 from PyQt6.QtWidgets import (
@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 class InputRowWidget(QWidget):
     # Создаем сигнал для передачи количества месяцев другим виджетам
     horizon_changed = pyqtSignal(int)
-
+    year_changed = pyqtSignal(int)
     def __init__(self):
         super().__init__()
         # Предварительная настройка шрифтов
@@ -74,17 +74,32 @@ class InputRowWidget(QWidget):
         # Устанавливаем валидатор (только цифры)
         self.payback_le.setValidator(QIntValidator(0, 999))
         self.payback_le.editingFinished.connect(self._validate_payback)
-
+        self.end_date_f, self.end_date_le = self.create_lineedit("Окончание проекта", editable=False, value="")
+        # Стилизуем как заблокированную ячейку (как Горизонт или Ед. изм.)
+        self.end_date_le.setStyleSheet("""
+                    QLineEdit { 
+                        border: 2px solid #87CEFA; 
+                        border-radius: 8px; 
+                        padding: 5px; 
+                        background-color: #F9F9F9; 
+                        color: #777777; 
+                    }
+                """)
         self.legend = self.create_legend()
 
         # 3. Подключение логики обновления
         self.dur_cb.currentTextChanged.connect(self._on_duration_changed)
+        self.year_cb.currentTextChanged.connect(self._on_year_changed)
+        self.month_cb.currentIndexChanged.connect(self._update_end_date)
 
-        # 4. Добавляем виджеты в слой (включая payback_f перед легендой)
+        self._update_end_date()
         widgets_to_add = [
             self.year_f, self.month_f, self.dur_f,
-            self.hor_f, self.unit_f, self.payback_f, self.legend
+            self.hor_f, self.unit_f, self.payback_f,
+            self.end_date_f, self.legend
         ]
+        # 4. Добавляем виджеты в слой (включая payback_f перед легендой)
+
 
         for w in widgets_to_add:
             self.main_layout.addWidget(w)
@@ -92,6 +107,65 @@ class InputRowWidget(QWidget):
         # 5. Пружина справа
         self.main_layout.addStretch(1)
 
+    def _update_end_date(self):
+        """Расчет даты окончания в формате: Месяц ГГГГ"""
+        try:
+            # 1. Получаем исходные данные
+            start_year = int(self.year_cb.currentText())
+            start_month_idx = self.month_cb.currentIndex() + 1  # Январь = 1
+            years_dur = int(self.dur_cb.currentText())
+
+            # 2. Работаем с датой
+            # Создаем дату на 1-е число месяца начала
+            start_date = QDate(start_year, start_month_idx, 1)
+
+            # Добавляем длительность (лет * 12).
+            # Вычитаем 1 день, чтобы попасть в последний месяц работы проекта.
+            # Пример: Май 2026 + 60 мес = Май 2031. Минус 1 день = Апрель 2031.
+            end_date = start_date.addMonths(years_dur * 12).addDays(-1)
+
+            # 3. Форматируем вывод
+            # Список русских месяцев (можно взять прямо из вашего combo box)
+            month_names = [
+                "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+                "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+            ]
+
+            target_month_name = month_names[end_date.month() - 1]
+            target_year = end_date.year()
+
+            self.end_date_le.setText(f"{target_month_name} {target_year}")
+
+        except Exception as e:
+            print(f"Ошибка расчета даты: {e}")
+            self.end_date_le.setText("-")
+    # И сам метод обработки:
+    def _on_year_changed(self, text):
+        try:
+            self.year_changed.emit(int(text))
+            self._update_end_date()
+        except ValueError:
+            pass
+
+    def _on_duration_changed(self, text):
+        """Обработка изменения длительности"""
+        try:
+            years = int(text)
+            months = years * 12
+            self.hor_le.setText(str(months))
+
+            # Авто-коррекция срока окупаемости
+            try:
+                current_payback = int(self.payback_le.text())
+                if current_payback > months:
+                    self.payback_le.setText(str(months))
+            except:
+                pass
+
+            self._update_end_date()  # Обновляем дату
+            self.horizon_changed.emit(months)
+        except ValueError:
+            pass
     def _validate_payback(self):
         """Проверка ввода: от 1 до 60, но не больше Горизонта расчета"""
         line_edit = self.payback_le
@@ -162,24 +236,6 @@ class InputRowWidget(QWidget):
 
             # Сбрасываем на максимально допустимое
             line_edit.setText(default)
-    def _on_duration_changed(self, text):
-        """Обработка изменения длительности (лет -> месяцы)"""
-        try:
-            years = int(text)
-            months = years * 12
-            self.hor_le.setText(str(months))
-
-            # АВТО-КОРРЕКЦИЯ: если старый срок окупаемости стал больше нового горизонта
-            try:
-                current_payback = int(self.payback_le.text())
-                if current_payback > months:
-                    self.payback_le.setText(str(months))
-            except ValueError:
-                pass
-
-            self.horizon_changed.emit(months)
-        except ValueError:
-            pass
 
     def create_combo(self, items, placeholder):
         f = QFrame()
@@ -321,3 +377,13 @@ class InputRowWidget(QWidget):
             l.addLayout(row)
         return f
 
+    def get_start_year(self):
+        """Возвращает выбранный год начала (int)"""
+        try:
+            return int(self.year_cb.currentText())
+        except:
+            return 2026
+
+    def get_start_month_index(self):
+        """Возвращает индекс месяца (1 для Января, 12 для Декабря)"""
+        return self.month_cb.currentIndex() + 1
