@@ -304,8 +304,6 @@ class CapitalExpenditureWidget(QFrame):
         self.table.blockSignals(False)
 
     def recalculate_row(self, row):
-        # Здесь сигналы УЖЕ заблокированы в validate_cell (в блоке except),
-        # но добавим страховку на случай вызова из других мест
         was_blocked = self.table.signalsBlocked()
         if not was_blocked: self.table.blockSignals(True)
 
@@ -313,12 +311,17 @@ class CapitalExpenditureWidget(QFrame):
             base_item = self.table.item(row, 4)
             param_item = self.table.item(row, 5)
             if base_item and param_item:
-                base = float(base_item.text().replace(',', '.'))
-                param = float(param_item.text().replace(',', '.'))
+                # ДОБАВЬТЕ .replace(' ', '') чтобы убрать пробелы из форматирования
+                base_str = base_item.text().replace(' ', '').replace(',', '.')
+                param_str = param_item.text().replace(' ', '').replace(',', '.')
+
+                base = float(base_str)
+                param = float(param_str)
+
                 total = base + (base * (param / 100))
                 self.table.item(row, 1).setText(self.format_as_money(total))
-        except:
-            pass
+        except Exception as e:
+            print(f"Ошибка пересчета: {e}")  # Поможет увидеть ошибку в консоли
 
         if not was_blocked: self.table.blockSignals(False)
 
