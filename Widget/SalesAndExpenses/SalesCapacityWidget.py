@@ -132,14 +132,36 @@ class SalesCapacityWidget(QFrame):
         self.main_layout.addWidget(scroll)
 
     def update_product_names(self, names_list):
+        """Обновляет список продуктов и перерисовывает строки таблицы"""
         self.last_known_names = names_list
-        for i, name in enumerate(names_list, 1):
-            if i in self.product_labels:
-                self.product_labels[i].setText(name)
-                for year in self.years:
-                    key = f"cap_{i}_{year}"
-                    if key in self.inputs:
-                        self.inputs[key].setProperty("name", f"{name} ({year})")
+
+        # 1. Очищаем старые строки (кроме заголовков лет в строке 0)
+        for i in reversed(range(self.grid.count())):
+            pos = self.grid.getItemPosition(i)
+            if pos[0] > 0:  # Если строка не заголовочная
+                item = self.grid.takeAt(i)
+                if item.widget():
+                    item.widget().deleteLater()
+
+        # 2. Сбрасываем словари
+        self.product_labels = {}
+        self.inputs = {}
+
+        # 3. Заново создаем строки для каждого продукта из нового списка
+        for row_idx, prod_name in enumerate(self.last_known_names, 1):
+            # Метка товара
+            p_lbl = QLabel(prod_name)
+            p_lbl.setFont(self.label_font)
+            p_lbl.setStyleSheet("font-style: italic; color: #555555; border: none;")
+            self.grid.addWidget(p_lbl, row_idx, 0)
+            self.product_labels[row_idx] = p_lbl
+
+            # Поля ввода для каждого года
+            for col_idx, year in enumerate(self.years):
+                # Подтягиваем сохраненное значение или ставим 100
+                le = self._create_edit("100", f"{prod_name} ({year})", row_idx, str(year))
+                self.grid.addWidget(le, row_idx, col_idx + 1)
+                self.inputs[f"cap_{row_idx}_{year}"] = le
 
     def _create_edit(self, default_val, name, product_row, year):
         current_val = self.stored_data.get((product_row, year), default_val)
@@ -262,15 +284,15 @@ class SalesCapacityWidget(QFrame):
                 lbl.setStyleSheet("font-weight: bold; background: #D0E6F5; border-radius: 5px; padding: 5px;")
                 self.grid.addWidget(lbl, 0, col + 1)
 
-            for row in range(1, 21):
+            for row in range(1, len(self.last_known_names) + 1):
                 prod_name = self.last_known_names[row - 1]
-                p_lbl = QLabel(prod_name);
+                p_lbl = QLabel(prod_name)
                 p_lbl.setFont(self.label_font)
                 p_lbl.setStyleSheet("font-style: italic; color: #555555; border: none;")
                 self.grid.addWidget(p_lbl, row, 0)
                 self.product_labels[row] = p_lbl
                 for col, year in enumerate(self.years):
-                    le = self._create_edit("100", f"{prod_name} ({year})", row, year)
+                    le = self._create_edit("100", f"{prod_name} ({year})", row, str(year))
                     self.grid.addWidget(le, row, col + 1)
                     self.inputs[f"cap_{row}_{year}"] = le
             self.grid.setColumnStretch(len(self.years) + 1, 10)
@@ -279,13 +301,21 @@ class SalesCapacityWidget(QFrame):
 
     def get_all_capacity_coefficients(self):
         result = {}
+        num_products = len(self.last_known_names)
         for year in self.years:
             year_ks = []
-            for row in range(1, 21):
+            for row in range(1, num_products + 1):
                 key = f"cap_{row}_{year}"
-                val = float(self.inputs[key].text().replace(',', '.')) / 100.0 if key in self.inputs else 1.0
+                if key in self.inputs:
+                    val_text = self.inputs[key].text().replace(',', '.')
+                    try:
+                        val = float(val_text) / 100.0
+                    except:
+                        val = 1.0
+                else:
+                    val = 1.0
                 year_ks.append(val)
-            result[year] = year_ks
+            result[str(year)] = year_ks
         return result
 
     def get_data(self):

@@ -106,10 +106,41 @@ class PriceGrowthWidget(QFrame):
     # --- ДОБАВЛЕННЫЕ МЕТОДЫ, КОТОРЫХ НЕ ХВАТАЛО ---
 
     def update_product_names(self, names_list):
+        """
+        Обновляет список продуктов. Полностью перерисовывает строки,
+        добавляя новые товары со значениями 0.
+        """
+        # Сохраняем новый список имен
         self.last_known_names = names_list
-        for i, name in enumerate(names_list, 1):
-            if i in self.product_labels:
-                self.product_labels[i].setText(name)
+
+        # 1. Очищаем старые виджеты строк (все, что ниже 0-й строки заголовков)
+        for i in reversed(range(self.grid.count())):
+            pos = self.grid.getItemPosition(i)
+            row = pos[0]
+            if row > 0:  # Строка 0 — это годы, их не трогаем
+                item = self.grid.takeAt(i)
+                if item.widget():
+                    item.widget().deleteLater()
+
+        # 2. Сбрасываем словари ссылок на виджеты
+        self.product_labels = {}
+        self.inputs = {}
+
+        # 3. Заново создаем строки для каждого продукта
+        for row_idx, prod_name in enumerate(self.last_known_names, 1):
+            # Создаем метку названия продукта
+            p_lbl = QLabel(prod_name)
+            p_lbl.setFont(self.label_font)
+            p_lbl.setStyleSheet("font-style: italic; color: #555555; border: none;")
+            self.grid.addWidget(p_lbl, row_idx, 0)
+            self.product_labels[row_idx] = p_lbl
+
+            # Создаем поля ввода для каждого года
+            for col_idx, year in enumerate(self.years):
+                # _create_edit подтянет значение из stored_data или поставит "0"
+                le = self._create_edit("0", f"{prod_name} ({year})", row_idx, str(year))
+                self.grid.addWidget(le, row_idx, col_idx + 1)
+                self.inputs[f"p_growth_{row_idx}_{year}"] = le
 
     def _create_edit(self, default_val, name, product_row, year):
         current_val = self.stored_data.get((product_row, year), default_val)

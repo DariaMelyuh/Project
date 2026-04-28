@@ -152,6 +152,9 @@ class MainWindow(QWidget):
         self.asset_sales_widget = AssetSalesWidget(self.input_widget)
         self.op_cf_widget = OperationalCashFlowWidget()
         self.yearly_results = YearlyResultsWidget()
+        # Когда в базе товаров что-то меняется, обновляем имена в темпах роста
+        self.revenue_params.products_changed.connect(self.volume_growth.update_product_names)
+        self.revenue_params.products_changed.connect(self.price_growth.update_product_names)
         self.income_selector = ScenarioSelectorWidget("Сценарий доходов")
         self.expense_selector = ScenarioSelectorWidget("Сценарий расходов")
 

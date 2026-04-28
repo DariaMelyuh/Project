@@ -25,6 +25,7 @@ class RevenueParametersWidget(QFrame):
         self.setObjectName("RevenueParamsContainer")
         self.current_data = []
 
+        self.layout = QVBoxLayout(self)
         # Обновленный список дефолтных данных (7 колонок)
         # Наим(0), Цена(1), Объем(2), Нач_цена(3), Баз_об(4), Пар_цены%(5), Пар_об%(6)
         self.default_data_list = [
@@ -56,38 +57,64 @@ class RevenueParametersWidget(QFrame):
             }
         """)
 
-        self.layout = QVBoxLayout(self)
+        header_layout = QHBoxLayout()
         title = QLabel("База товаров")
         title.setFont(QFont("Times New Roman", 14, QFont.Weight.Bold))
         title.setStyleSheet("color: black; background: transparent; border: none;")
-        self.layout.addWidget(title)
+        header_layout.addWidget(title)
+
+        # Кнопки управления строками
+        self.add_row_btn = QPushButton("+ Добавить товар")
+        self.del_row_btn = QPushButton("- Удалить товар")
+        for btn in [self.add_row_btn, self.del_row_btn]:
+            btn.setFixedSize(150, 30)
+            btn.setStyleSheet("""
+                        QPushButton { 
+                            background-color: #F0F8FF; border: 1px solid #B9D9EB; 
+                            border-radius: 5px; font-family: 'Times New Roman'; font-size: 12pt;
+                        }
+                        QPushButton:hover { background-color: #E0F0FF; }
+                    """)
+
+        header_layout.addStretch()
+        header_layout.addWidget(self.add_row_btn)
+        header_layout.addWidget(self.del_row_btn)
+        self.layout.addLayout(header_layout)
 
         # Таблица: 20 строк, 7 колонок
-        self.table = QTableWidget(20, 7)
+
+        headers = [
+            "Наименование", "Цена, руб", "Объем, ед/мес",
+            "Начальная\nцена, руб", "Начальный\nобъем, ед/мес",
+            "Параметр изм.\nцены, %", "Параметр изм.\nобъема, %"
+        ]
+        # Таблица
+        self.table = QTableWidget(len(self.default_data_list), 7)
         headers = [
             "Наименование", "Цена, руб", "Объем, ед/мес",
             "Начальная\nцена, руб", "Начальный\nобъем, ед/мес",
             "Параметр изм.\nцены, %", "Параметр изм.\nобъема, %"
         ]
         self.table.setHorizontalHeaderLabels(headers)
-        self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setVisible(True)  # Включим индексы, чтобы легче ориентироваться
         self.table.horizontalHeader().setFixedHeight(75)
-        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap)
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.setFixedWidth(900) # Уменьшили ширину виджета, так как колонок меньше
-        self.table.setFixedWidth(850)
-
-        self.table.setColumnWidth(0, 200)
+        self.setFixedWidth(920)
+        self.table.setFixedWidth(870)
+        self.table.setColumnWidth(0, 180)
         for i in range(1, 7):
             self.table.setColumnWidth(i, 105)
 
-        # Применяем стили скроллбара и таблицы
         self.apply_table_styles()
-
         self.fill_default_data()
-        self.table.itemChanged.connect(self.validate_cell)
 
-        self.table.setFixedHeight(35 * 7)
+        # Сигналы
+        self.table.itemChanged.connect(self.validate_cell)
+        self.add_row_btn.clicked.connect(self.add_new_row)
+        self.del_row_btn.clicked.connect(self.delete_selected_row)
+
+        self.table.setFixedHeight(350)
         self.layout.addWidget(self.table)
 
         self.apply_btn = QPushButton("Принять данные")
@@ -97,7 +124,7 @@ class RevenueParametersWidget(QFrame):
         self.layout.addWidget(self.apply_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self.accept_data()
-
+        self.emit_products()
     def apply_table_styles(self):
         self.table.setStyleSheet("""
             QTableWidget { 
@@ -117,21 +144,114 @@ class RevenueParametersWidget(QFrame):
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """)
 
+
+
+    def add_new_row(self):
+        """Добавляет пустую строку в конец таблицы"""
+        row_count = self.table.rowCount()
+        self.table.blockSignals(True)
+        self.table.insertRow(row_count)
+
+        # Значения по умолчанию для новой строки
+        new_row_values = [f"Новый продукт {row_count + 1}", "0", "0", "0", "0", "0", "0"]
+
+        for c, val in enumerate(new_row_values):
+            item = QTableWidgetItem(val)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            # Настройка блокировки и цвета
+            if c in [1, 2]:
+                item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
+                item.setBackground(QBrush(QColor("#F9F9F9")))
+            else:
+                item.setBackground(QBrush(QColor("#E0F7FF")))
+
+            self.table.setItem(row_count, c, item)
+
+        self.table.setRowHeight(row_count, 35)
+        self.table.blockSignals(False)
+        self.table.scrollToBottom()
+        self.mark_as_changed()
+        self.emit_products()
+
+    def delete_selected_row(self):
+        """Удаляет текущую выбранную строку со стилизованным подтверждением"""
+        current_row = self.table.currentRow()
+
+        # Если ничего не выбрано, удаляем последнюю
+        if current_row == -1:
+            current_row = self.table.rowCount() - 1
+
+        if current_row >= 0:
+            # Создаем кастомный MessageBox
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Подтверждение удаления")
+            msg.setFont(QFont("Times New Roman", 12))
+
+            # Текст сообщения
+            msg.setText(f"Вы уверены, что хотите удалить строку <b>№{current_row + 1}</b>?")
+            msg.setInformativeText("Это действие нельзя будет отменить.")
+
+            # Добавляем стандартные кнопки
+            yes_button = msg.addButton("Да, удалить", QMessageBox.ButtonRole.YesRole)
+            no_button = msg.addButton("Отмена", QMessageBox.ButtonRole.NoRole)
+            msg.setDefaultButton(no_button)
+
+            # Применяем стилизацию как в окне ошибок
+            msg.setStyleSheet("""
+                            QMessageBox {
+                                background-color: white;
+                            }
+                            QMessageBox QLabel { 
+                                color: #333333; 
+                                min-width: 400px; 
+                                font-family: 'Times New Roman';
+                                font-size: 16px;
+                                background-color: transparent; /* Убирает голубую заливку строк */
+                                border: none;
+                                padding: 5px;
+                            }
+                            QPushButton { 
+                                font-family: 'Times New Roman'; 
+                                font-size: 14px; 
+                                min-width: 100px; 
+                                padding: 8px; 
+                                background-color: #E0F7FF;
+                                border: 2px solid #87CEFA;
+                                border-radius: 8px;
+                                color: #0066CC;
+                                font-weight: bold;
+                            }
+                            QPushButton:hover { 
+                                background-color: #B9D9EB; 
+                                border: 2px solid #0066CC;
+                            }
+                        """)
+
+            msg.exec()
+
+            # Если нажата кнопка "Да"
+            if msg.clickedButton() == yes_button:
+                self.table.removeRow(current_row)
+                self.mark_as_changed()
+                self.emit_products()
+    def mark_as_changed(self):
+        """Помечает, что данные в таблице изменились"""
+        self.apply_btn.setText("Принять изменения *")
+        self.set_apply_btn_style("warning")
+
     def fill_default_data(self):
         self.table.blockSignals(True)
-        for r in range(20):
-            data = self.default_data_list[r]
+        self.table.setRowCount(len(self.default_data_list))
+        for r, data in enumerate(self.default_data_list):
             for c in range(7):
                 item = QTableWidgetItem(str(data[c]).replace('.', ','))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-
-                # Вычисляемые колонки (Цена и Объем) - теперь индексы 1 и 2
                 if c in [1, 2]:
                     item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
                     item.setBackground(QBrush(QColor("#F9F9F9")))
                 else:
                     item.setBackground(QBrush(QColor("#E0F7FF")))
-
                 self.table.setItem(r, c, item)
             self.table.setRowHeight(r, 35)
         self.table.blockSignals(False)
@@ -144,38 +264,45 @@ class RevenueParametersWidget(QFrame):
         col = item.column()
 
         if col == 0:
+            self.mark_as_changed()
             self.emit_products()
             return
 
         self.table.blockSignals(True)
 
-        raw_text = item.text().replace(',', '.').replace(' ', '').strip()
-        # Значение по умолчанию тоже пропускаем через форматирование
-        default_val_raw = self.default_data_list[row][col]
+        if row < len(self.default_data_list):
+            default_val_raw = self.default_data_list[row][col]
+        else:
+            default_val_raw = 0
 
+        raw_text = item.text().replace(',', '.').replace(' ', '').strip()
         headers_names = [
             "Наименование", "Цена", "Объем", "Начальная цена",
             "Начальный объем", "Параметр изм. цены", "Параметр изм. объема"
         ]
         param_name = headers_names[col]
-
-        self.apply_btn.setText("Принять изменения *")
-        self.set_apply_btn_style("warning")
+        self.mark_as_changed()
 
         def format_num(val):
-            """Убирает .0 если число целое, иначе оставляет 2 знака"""
             if val == int(val):
                 return str(int(val))
             return f"{val:.2f}".replace('.', ',')
 
         try:
-            if not raw_text: raise ValueError
-            value = float(raw_text)
+            if not raw_text:
+                raise ValueError
 
-            # Проверки диапазонов
+            value = float(raw_text)
             valid = True
-            if col == 4:  # Начальный объем
-                if not (0 <= value <= 10000):
+
+            # --- НОВЫЙ БЛОК ПРОВЕРОК ---
+            if col == 3:  # Начальная цена
+                if not (0 <= value <= 10_000_000_000):
+                    self.show_error_message(param_name, "от 0 до 10 000 000 000 руб.", "10 000 000 000")
+                    item.setText(format_num(default_val_raw))
+                    valid = False
+            elif col == 4:  # Начальный объем
+                if not (0 <= value <= 10_000):
                     self.show_error_message(param_name, "от 0 до 10 000 ед.", format_num(default_val_raw))
                     item.setText(format_num(default_val_raw))
                     valid = False
@@ -186,19 +313,18 @@ class RevenueParametersWidget(QFrame):
                     valid = False
             elif value < 0:
                 raise ValueError
+            # ---------------------------
 
             if valid:
-                if col == 3:  # Начальная цена (оставляем пробел-разделитель и 2 знака)
+                if col == 3:
                     formatted = f"{value:,.2f}".replace(',', ' ').replace('.', ',')
-                    # Если после запятой только нули, можно убрать их и тут, но в деньгах обычно оставляют
-                    # Если все же нужно убрать:
-                    if formatted.endswith(',00'): formatted = formatted[:-3]
+                    if formatted.endswith(',00'):
+                        formatted = formatted[:-3]
                     item.setText(formatted)
                 else:
-                    # Для всех остальных (Объем, %) используем чистый формат без ,0
                     item.setText(format_num(value))
 
-            self.recalculate_row_value(row, "price" if col in [3, 5] else "volume")
+                self.recalculate_row_value(row, "price" if col in [3, 5] else "volume")
 
         except ValueError:
             self.show_error_message(param_name, "положительное число", format_num(default_val_raw))
@@ -310,7 +436,13 @@ class RevenueParametersWidget(QFrame):
         return self.get_products_full_data()
 
     def emit_products(self):
-        names = [self.table.item(r, 0).text() if self.table.item(r, 0) else f"Продукт {r+1}" for r in range(20)]
+        # Используем self.table.rowCount() вместо фиксированного числа 20
+        row_count = self.table.rowCount()
+        names = [
+            self.table.item(r, 0).text() if self.table.item(r, 0) and self.table.item(r, 0).text()
+            else f"Продукт {r + 1}"
+            for r in range(row_count)
+        ]
         self.products_changed.emit(names)
 
     def set_apply_btn_style(self, state):

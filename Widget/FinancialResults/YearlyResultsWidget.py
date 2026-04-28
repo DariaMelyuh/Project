@@ -231,6 +231,7 @@ class YearlyResultsWidget(QFrame):
             num_prods = len(products_data)
             cap_ks = sales_capacity_data.get(year_str, [1.0] * num_prods)
             v_growth_year = volume_growth_data.get(year_str, [0.0] * num_prods)
+            # Здесь мы используем p_growth_year
             p_growth_year = price_growth_data.get(year_str, [0.0] * num_prods)
 
             for _ in range(months_per_year[year]):
@@ -238,15 +239,23 @@ class YearlyResultsWidget(QFrame):
                 m_sum = 0
 
                 for p_idx in range(num_prods):
-                    # Применяем рост СЛЕДУЮЩЕГО шага (цепной метод)
-                    # Если это не самый первый месяц проекта, увеличиваем базу
+                    # 1. Применяем рост (цепной метод)
                     if abs_m > 0:
-                        v_g_month = (v_growth_year[p_idx] / 100) / 12
-                        p_g_month = (p_growth_year[p_idx] / 100) / 12
+                        # Безопасное получение темпов роста
+                        v_g_raw = v_growth_year[p_idx] if p_idx < len(v_growth_year) else 0.0
+                        # ИСПРАВЛЕНО: используем p_growth_year везде
+                        p_g_raw = p_growth_year[p_idx] if p_idx < len(p_growth_year) else 0.0
+
+                        v_g_month = (v_g_raw / 100) / 12
+                        p_g_month = (p_g_raw / 100) / 12
                         curr_v[p_idx] *= (1 + v_g_month)
                         curr_p[p_idx] *= (1 + p_g_month)
 
-                    vol = curr_v[p_idx] * cap_ks[p_idx] * seasonal_k
+                    # 2. Безопасное получение коэффициента использования мощности
+                    # Если товар новый и его еще нет в cap_ks, считаем мощность 100% (1.0)
+                    cap_k = cap_ks[p_idx] if p_idx < len(cap_ks) else 1.0
+
+                    vol = curr_v[p_idx] * cap_k * seasonal_k
                     prc = curr_p[p_idx]
                     m_sum += (vol * prc)
 

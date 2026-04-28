@@ -123,10 +123,45 @@ class VolumeGrowthWidget(QFrame):
         self.main_layout.addWidget(scroll)
 
     def update_product_names(self, names_list):
+        """
+        Обновляет список продуктов. Если добавлены новые продукты,
+        они отрисовываются в таблице со значениями 0.
+        """
+        print(f"Обновление списка: {len(names_list)} товаров")  # Для отладки
+
+        # Сохраняем новый список имен
         self.last_known_names = names_list
-        for i, name in enumerate(names_list, 1):
-            if i in self.product_labels:
-                self.product_labels[i].setText(name)
+
+        # Очищаем сетку (кроме заголовков лет, которые в 0-й строке)
+        # Удаляем все виджеты со строки 1 и ниже
+        for i in reversed(range(self.grid.count())):
+            pos = self.grid.getItemPosition(i)
+            row = pos[0]
+            if row > 0:  # Строка 0 — это заголовки лет, их не трогаем
+                item = self.grid.takeAt(i)
+                if item.widget():
+                    item.widget().deleteLater()
+
+        # Сбрасываем словари ссылок на виджеты (но stored_data сохраняется)
+        self.product_labels = {}
+        self.inputs = {}
+
+        # Заново отрисовываем строки для каждого продукта
+        for row_idx, prod_name in enumerate(self.last_known_names, 1):
+            # Создаем метку продукта
+            p_lbl = QLabel(prod_name)
+            p_lbl.setFont(self.label_font)
+            p_lbl.setStyleSheet("font-style: italic; color: #555555; border: none;")
+            self.grid.addWidget(p_lbl, row_idx, 0)
+            self.product_labels[row_idx] = p_lbl
+
+            # Создаем поля ввода для каждого года
+            for col_idx, year in enumerate(self.years):
+                # _create_edit автоматически подтянет значение из stored_data,
+                # если оно там есть, иначе поставит "0"
+                le = self._create_edit("0", f"{prod_name} ({year})", row_idx, str(year))
+                self.grid.addWidget(le, row_idx, col_idx + 1)
+                self.inputs[f"growth_{row_idx}_{year}"] = le
 
     def _create_edit(self, default_val, name, product_row, year):
         current_val = self.stored_data.get((product_row, year), default_val)
