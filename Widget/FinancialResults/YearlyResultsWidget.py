@@ -199,7 +199,8 @@ class YearlyResultsWidget(QFrame):
             "Проценты по кредиту",
             "EBT (Прибыль до налога)",
             "Налог (УСН)",
-            "Чистая прибыль"
+            "Чистая прибыль",
+            "Рентабельность продаж, %"  # Добавили новую строку
         ]
 
         self.table.blockSignals(True)
@@ -293,17 +294,38 @@ class YearlyResultsWidget(QFrame):
                     yearly_vals[r_i][y_idx] += val
                 abs_m_ptr += 1
 
-        # 4. Отрисовка (без изменений)
+        for y_idx in range(len(calendar_years)):
+            rev_year = yearly_vals[0][y_idx]
+            net_year = yearly_vals[8][y_idx]
+
+            if rev_year != 0:
+                yearly_vals[9][y_idx] = (net_year / rev_year) * 100
+            else:
+                yearly_vals[9][y_idx] = 0.0
+
+        # 4. Отрисовка
         for r in range(len(indicators)):
-            # Используем кастомный метод для первой колонки
             self.table.setItem(r, 0, self._create_header_col_item(indicators[r]))
 
-            # Используем кастомный метод для колонки "Итого"
-            self.table.setItem(r, 1, self._create_total_item(sum(yearly_vals[r])))
+            # Считаем значение для колонки "Итого"
+            if r == 9:  # Для рентабельности считаем итого как средневзвешенное, а не сумму
+                total_rev = sum(yearly_vals[0])
+                total_net = sum(yearly_vals[8])
+                total_val = (total_net / total_rev * 100) if total_rev != 0 else 0
+            else:
+                total_val = sum(yearly_vals[r])
 
-            # Используем кастомный метод для расчетных лет
+            # Вывод значения "Итого"
+            total_item = self._create_total_item(total_val)
+            if r == 9: total_item.setText(f"{total_val:.2f} %")  # Формат процента
+            self.table.setItem(r, 1, total_item)
+
+            # Вывод годовых значений
             for c, val in enumerate(yearly_vals[r]):
-                self.table.setItem(r, c + 2, self._create_calc_item(val))
+                calc_item = self._create_calc_item(val)
+                if r == 9:
+                    calc_item.setText(f"{val:.2f} %")  # Формат процента
+                self.table.setItem(r, c + 2, calc_item)
 
         self._apply_alignment()
         self.table.blockSignals(False)
