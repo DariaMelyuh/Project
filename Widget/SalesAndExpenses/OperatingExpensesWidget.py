@@ -69,8 +69,7 @@ class OperatingExpensesWidget(QFrame):
         self.table.horizontalHeader().setFixedHeight(68)
         self.table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap)
 
-        self.setFixedWidth(860)
-        self.table.setFixedWidth(540)
+        self.table.setFixedWidth(525)
         self.table.setColumnWidth(0, 180)
         self.table.setColumnWidth(1, 120)
         self.table.setColumnWidth(2, 120)
@@ -86,7 +85,7 @@ class OperatingExpensesWidget(QFrame):
         self.table.setFixedHeight(315)
         self.layout.addWidget(self.table, alignment=Qt.AlignmentFlag.AlignCenter)
         #self.setFixedWidth(860)
-        #self.setFixedHeight(490)
+
         # Отступ 20 пикселей между таблицей и футером
 
         # --- 3. ФУТЕР ---
@@ -108,6 +107,8 @@ class OperatingExpensesWidget(QFrame):
 
         self.layout.addLayout(footer_layout)
         self.update_overall_total()
+
+
 
     def apply_table_styles(self):
         self.table.setStyleSheet("""
