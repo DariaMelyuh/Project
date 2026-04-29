@@ -102,7 +102,7 @@ class RevenueParametersWidget(QFrame):
 
         self.setFixedWidth(920)
         self.table.setFixedWidth(870)
-        self.table.setColumnWidth(0, 180)
+        self.table.setColumnWidth(0, 190)
         for i in range(1, 7):
             self.table.setColumnWidth(i, 105)
 
