@@ -338,7 +338,7 @@ class EfficiencyMetricsWidget(QWidget):
             if re_values:
                 # Берем максимальную ставку (самый консервативный сценарий)
                 effective_rate = max(re_values)
-                print(f"DEBUG: Найдена динамическая ставка в CAPM: {effective_rate:.2%}")
+
         else:
             print("DEBUG: Связь с CAPMWidget не найдена, используем 15%")
 
@@ -347,14 +347,7 @@ class EfficiencyMetricsWidget(QWidget):
         arr = avg_annual_np / investments
         is_arr_ok = arr >= effective_rate
 
-        # ВЫВОД В КОНСОЛЬ:
-        print("-" * 30)
-        print(f"DEBUG ARR: Средняя год. прибыль = {avg_annual_np:,.2f}")
-        print(f"DEBUG ARR: Инвестиции = {investments:,.2f}")
-        print(f"DEBUG ARR: Результат ARR = {arr:.2%}")
-        print(f"DEBUG ARR: Сравнение с эффективной ставкой = {effective_rate:.2%}")
-        print(f"DEBUG ARR: Статус = {'OK' if is_arr_ok else 'LOW'}")
-        print("-" * 30)
+
 
         status_text = "Выше нормы" if is_arr_ok else "Ниже нормы"
         comment = f"Доходность {status_text} ({effective_rate:.1%})"

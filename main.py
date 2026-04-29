@@ -667,7 +667,7 @@ class MainWindow(QWidget):
         }
 
     def sync_yearly_table(self):
-        print("SYNC CALLED")
+
         try:
             if not hasattr(self, 'op_cf_widget') or not hasattr(self, 'yearly_results'):
                 return
