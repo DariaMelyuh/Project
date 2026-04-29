@@ -17,7 +17,7 @@ class CapitalExpenditureWidget(QFrame):
         self.PROJECT_HORIZON = 12
         self.current_data = []
 
-        # Данные
+        # Базовые данные (используются как эталон для восстановления при ошибках)
         self.default_data_list = [
             ["Актив 1", 0, 1, 10, 1000.0, 0], ["Актив 2", 0, 1, 12, 10000.0, 0],
             ["Актив 3", 0, 2, 11, 5000.0, 0], ["Актив 4", 0, 1, 5, 7000.0, 0],
@@ -31,15 +31,32 @@ class CapitalExpenditureWidget(QFrame):
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(20, 15, 20, 15)
 
-        # 1. ЗАГОЛОВОК: Черный цвет шрифта
+        # --- 1. ЗАГОЛОВОК И КНОПКИ ---
+        header_layout = QHBoxLayout()
         title = QLabel("Капитальные затраты")
         title.setFont(QFont("Times New Roman", 14, QFont.Weight.Bold))
-        title.setStyleSheet("color: black; background: transparent; border: none;")  # Установлен черный цвет
-        self.layout.addWidget(title)
+        title.setStyleSheet("color: black; background: transparent; border: none;")
+        header_layout.addWidget(title)
 
-        # 2. ТАБЛИЦА
+        self.add_row_btn = QPushButton("+ Добавить актив")
+        self.del_row_btn = QPushButton("- Удалить актив")
+        for btn in [self.add_row_btn, self.del_row_btn]:
+            btn.setFixedSize(160, 30)
+            btn.setStyleSheet("""
+                QPushButton { 
+                    background-color: #F0F8FF; border: 1px solid #B9D9EB; 
+                    border-radius: 5px; font-family: 'Times New Roman'; font-size: 11pt;
+                }
+                QPushButton:hover { background-color: #E0F0FF; }
+            """)
 
-        self.table = QTableWidget(10, 6)
+        header_layout.addStretch()
+        header_layout.addWidget(self.add_row_btn)
+        header_layout.addWidget(self.del_row_btn)
+        self.layout.addLayout(header_layout)
+
+        # --- 2. ТАБЛИЦА ---
+        self.table = QTableWidget(0, 6) # Начинаем с 0, заполним в fill_default_data
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setFrameShape(QFrame.Shape.NoFrame)
         headers = [
@@ -47,78 +64,27 @@ class CapitalExpenditureWidget(QFrame):
             "Срок службы\n(мес)", "Базовая\nстоимость, руб", "Параметр изм.\nцены, %"
         ]
         self.table.setHorizontalHeaderLabels(headers)
-        self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setVisible(True) # Включаем индексы для удобства
         self.table.horizontalHeader().setFixedHeight(65)
         self.table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap)
 
         self.setFixedWidth(860)
-        self.setFixedHeight(427)
-        self.table.setFixedWidth(790)
+        self.setFixedHeight(460) # Немного увеличим высоту для кнопок
+        self.table.setFixedWidth(810)
 
-
-
-        self.table.setColumnWidth(0, 200)
-        for i in range(1, 6):
-            self.table.setColumnWidth(i, 115)
-
-        # 3. СТИЛИЗАЦИЯ ТАБЛИЦЫ И ЦВЕТНОГО СКРОЛЛБАРА
-        self.table.setStyleSheet("""
-            QTableWidget { 
-                border: 1px solid #D0E6F5; 
-                
-                gridline-color: #E1EFF8; 
-                font-family: 'Times New Roman'; 
-                font-size: 12pt;
-                background-color: white; 
-                outline: 0;
-            }
-            QHeaderView::section { 
-                background-color: #B9D9EB; 
-                color: black; 
-                font-family: 'Times New Roman'; 
-                font-weight: bold; 
-                font-size: 11pt;
-                border: 1px solid #D0E6F5; 
-                padding: 2px; 
-            }
-            QHeaderView::section:horizontal:first { border-top-left-radius: 15px; }
-            QHeaderView::section:horizontal:last { border-top-right-radius: 15px; }
-
-            /* ВЕРТИКАЛЬНЫЙ СКРОЛЛБАР */
-            QScrollBar:vertical {
-                border: none;
-                background: #F0F8FF;
-                width: 12px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #B9D9EB;
-                min-height: 20px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical:hover { background-color: #A1C9DE; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
-
-            /* ГОРИЗОНТАЛЬНЫЙ СКРОЛЛБАР */
-            QScrollBar:horizontal {
-                border: none;
-                background: #F0F8FF;
-                height: 12px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:horizontal {
-                background-color: #B9D9EB;
-                min-width: 20px;
-                border-radius: 6px;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
-        """)
+        # Применяем стили таблицы (скроллбары и заголовки)
+        self.apply_table_styles()
 
         self.fill_default_data()
-        self.table.cellChanged.connect(self.validate_cell)
-        self.table.setFixedHeight(35 * 9)
-        self.layout.addWidget(self.table)
 
+        # --- 3. СИГНАЛЫ ---
+        self.table.cellChanged.connect(self.validate_cell)
+        self.add_row_btn.clicked.connect(self.add_new_row)
+        self.del_row_btn.clicked.connect(self.delete_selected_row)
+
+        self.table.setFixedHeight(350)
+        self.layout.addWidget(self.table)
+        self.layout.addSpacing(10)
         self.apply_btn = QPushButton("Принять данные")
         self.apply_btn.setFixedSize(220, 35)
         self.apply_btn.setFont(QFont("Times New Roman", 12, QFont.Weight.Bold))
@@ -128,96 +94,180 @@ class CapitalExpenditureWidget(QFrame):
 
         self.accept_data()
 
-    # ... (методы format_val, fill_default_data, recalculate_row остаются без изменений) ...
+    def apply_table_styles(self):
+        self.table.setStyleSheet("""
+                   QTableWidget { 
+                       border: 1px solid #D0E6F5; 
+                       gridline-color: #E1EFF8; font-family: 'Times New Roman'; 
+                       font-size: 12pt; background-color: white;
+                   }
+                   QHeaderView::section { 
+                       background-color: #B9D9EB; font-family: 'Times New Roman'; 
+                       font-size: 11pt; font-weight: bold; border: 1px solid #D0E6F5; padding: 2px; 
+                   }
+                  QHeaderView::section:horizontal:first { border-top-left-radius: 15px; }
+                   QHeaderView::section:horizontal:last { border-top-right-radius: 15px; }
+                   QScrollBar:vertical { border: none; background: #F0F8FF; width: 12px; border-radius: 6px; }
+                   QScrollBar::handle:vertical { background-color: #B9D9EB; min-height: 20px; border-radius: 6px; }
+                   QScrollBar::handle:vertical:hover { background-color: #A1C9DE; }
+                   QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+               """)
+
+    def add_new_row(self):
+        """Добавляет новый пустой актив"""
+        row_count = self.table.rowCount()
+        self.table.blockSignals(True)
+        self.table.insertRow(row_count)
+
+        # Дефолтные значения для новой строки
+        # Наим(0), Итого(1), Месяц(2), Срок(3), База(4), %(5)
+        new_row_data = [f"Новый актив {row_count + 1}", "0,00", "1", "1", "0,00", "0"]
+
+        for c, val in enumerate(new_row_data):
+            item = QTableWidgetItem(val)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            # ВАЖНО: сохраняем начальное значение в UserRole
+            item.setData(Qt.ItemDataRole.UserRole, val)
+
+            if c == 1:
+                item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
+                item.setBackground(QBrush(QColor("#F9F9F9")))
+            else:
+                item.setBackground(QBrush(QColor("#E0F7FF")))
+            self.table.setItem(row_count, c, item)
+
+        self.table.setRowHeight(row_count, 35)
+        self.table.blockSignals(False)
+        self.mark_as_changed()
+        self.table.scrollToBottom()
+
+    def delete_selected_row(self):
+        """Удаляет текущую выбранную строку, но не фиксирует данные окончательно"""
+        current_row = self.table.currentRow()
+
+        if current_row == -1:
+            current_row = self.table.rowCount() - 1
+
+        if current_row >= 0:
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Подтверждение удаления")
+            msg.setFont(QFont("Times New Roman", 12))
+            msg.setText(f"Вы уверены, что хотите удалить строку <b>№{current_row + 1}</b>?")
+            msg.setInformativeText("Это действие нельзя будет отменить.")
+
+            yes_button = msg.addButton("Да, удалить", QMessageBox.ButtonRole.YesRole)
+            no_button = msg.addButton("Отмена", QMessageBox.ButtonRole.NoRole)
+            msg.setDefaultButton(no_button)
+
+            msg.setStyleSheet("""
+                QMessageBox { background-color: white; }
+                QMessageBox QLabel { 
+                    color: #333333; 
+                    min-width: 400px; 
+                    font-family: 'Times New Roman';
+                    font-size: 16px;
+                    background: transparent;
+                }
+                QPushButton { 
+                    font-family: 'Times New Roman'; font-size: 14px; 
+                    min-width: 100px; padding: 8px; 
+                    background-color: #E0F7FF; border: 2px solid #87CEFA;
+                    border-radius: 8px; color: #0066CC; font-weight: bold;
+                }
+                QPushButton:hover { background-color: #B9D9EB; border: 2px solid #0066CC; }
+            """)
+
+            msg.exec()
+
+            if msg.clickedButton() == yes_button:
+                self.table.removeRow(current_row)
+
+                # ВАЖНО: Только переводим кнопку в режим "изменения не приняты"
+                self.mark_as_changed()
+
+    def mark_as_changed(self):
+        self.apply_btn.setText("Принять изменения*")
+        self.set_apply_btn_style("warning")
 
     def validate_cell(self, row, col):
-        # Если сигналы заблокированы или это колонка с названием актива (0) — выходим
+        # Игнорируем заблокированные сигналы и колонку с названием
         if self.table.signalsBlocked() or col == 0:
             return
 
         item = self.table.item(row, col)
-        if not item:
-            return
+        if not item: return
 
-        # 1. ОЧИСТКА ВВОДА: Удаляем пробелы и меняем запятую на точку для расчетов
+        # Сохраняем "старое" значение в памяти перед обработкой (UserRole)
+        # Если его там нет (новая строка), берем текущий текст
+        old_val_raw = item.data(Qt.ItemDataRole.UserRole)
+        if old_val_raw is None:
+            old_val_raw = item.text()
+
         raw_text = item.text().strip()
         clean_text = raw_text.replace(' ', '').replace(',', '.')
 
-        asset_name_item = self.table.item(row, 0)
-        asset_name = asset_name_item.text().strip() if asset_name_item else f"Строка {row + 1}"
+        name_item = self.table.item(row, 0)
+        asset_name = name_item.text() if name_item else f"Строка {row + 1}"
 
         try:
-            # Преобразуем в число
             val = float(clean_text)
-            if val < 0:
-                raise ValueError("Отрицательное значение")
+            if val < 0: raise ValueError("Отрицательное значение")
 
-            # 2. ПРОВЕРКИ ПО КОЛОНКАМ
-
-            # Месяц покупки (Колонка 2)
-            if col == 2:
-                if not val.is_integer():
-                    raise ValueError("Должно быть целым числом")
-                if val < 1 or val > self.PROJECT_HORIZON:
+            # Проверка лимитов
+            if col == 2:  # Месяц
+                if not val.is_integer() or not (1 <= val <= self.PROJECT_HORIZON):
                     raise ValueError(f"Месяц должен быть от 1 до {self.PROJECT_HORIZON}")
 
-            # Срок службы (Колонка 3)
-            elif col == 3:
-                if not val.is_integer():
-                    raise ValueError("Должно быть целым числом")
-                # Получаем месяц покупки из таблицы (чистим его от пробелов на всякий случай)
+            elif col == 3:  # Срок службы
                 m_item = self.table.item(row, 2)
-                m_val = int(float(m_item.text().replace(' ', '').replace(',', '.'))) if m_item else 1
+                # Извлекаем месяц покупки для проверки горизонта
+                try:
+                    m_val = int(float(m_item.text().replace(' ', '').replace(',', '.')))
+                except:
+                    m_val = 1
 
-                if val < 1:
-                    raise ValueError("Минимум 1 месяц")
-                # Условие: Месяц покупки + срок службы - 1 <= Горизонт проекта
                 if (m_val + val - 1) > self.PROJECT_HORIZON:
-                    raise ValueError(f"Выход за горизонт планирования ({self.PROJECT_HORIZON} мес.)")
+                    raise ValueError(f"Срок выходит за горизонт планирования ({self.PROJECT_HORIZON} мес.)")
 
-            # Базовая стоимость (Колонка 4)
-            elif col == 4:
-                if val > 1_000_000_000:  # 1 миллиард
-                    raise ValueError("Слишком большая сумма")
+            elif col == 4:  # Стоимость
+                if val > 1_000_000_000:
+                    raise ValueError("Сумма не может превышать 1 000 000 000 руб.")
 
-                # СРАЗУ КРАСИВО ФОРМАТИРУЕМ ВВОД
-                self.table.blockSignals(True)
+            # Если всё прошло успешно:
+            self.table.blockSignals(True)
+            # Сохраняем это значение как "последнее успешное"
+            item.setData(Qt.ItemDataRole.UserRole, item.text())
+
+            if col == 4:
                 item.setText(self.format_as_money(val))
-                self.table.blockSignals(False)
 
-            # Параметр изменения цены % (Колонка 5)
-            elif col == 5:
-                if val > 100:
-                    raise ValueError("Максимум 100%")
+            self.table.blockSignals(False)
+            self.mark_as_changed()
 
-            # 3. ЕСЛИ ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ
-            self.apply_btn.setText("Принять изменения*")
-            self.set_apply_btn_style("warning")
-
-            # Пересчитываем итоговую стоимость (Col 1), если изменилась цена или %
             if col in [4, 5]:
                 self.recalculate_row(row)
 
 
-
         except ValueError as e:
-            # 1. Блокируем сигналы, чтобы избежать бесконечного цикла (рекурсии)
             self.table.blockSignals(True)
-            # Показываем окно с ошибкой (вызываем ваш метод)
             self.show_error(str(e), asset_name, col)
-            # 2. Вовращаем старое (дефолтное) значение из списка
-            # Внимание: убедитесь, что индексы в default_data_list совпадают!
-            # (Название 0, Итого 1, Месяц 2, Срок 3, База 4, % 5)
-            original_val = self.default_data_list[row][col]
-            if col in [4]:  # Если это стоимость
-                item.setText(self.format_as_money(original_val))
+            # 1. Сначала пытаемся взять "последнее удачное" из памяти ячейки
+            orig = item.data(Qt.ItemDataRole.UserRole)
+            # 2. Есл памяти нет (совсем новая ячейка), берем из эталона или ставим 0
+            if orig is None:
+                if row < len(self.default_data_list):
+                    orig = self.default_data_list[row][col]
+                else:
+                    # Дефолты для абсолютно новых строк без истории
+                    orig = 1 if col in [2, 3] else 0
+
+            # Устанавливаем текст обратно
+            if col == 4:
+                item.setText(self.format_as_money(orig))
             else:
-                item.setText(self.format_val(original_val))
-            # 3. Возвращаем цвет фона (светло-голубой для ввода)
-            item.setBackground(QBrush(QColor("#E0F7FF")))
-            # 4. Пересчитываем строку, если нужно
+                item.setText(self.format_val(orig))
             self.recalculate_row(row)
-            # 5. РАЗБЛОКИРУЕМ сигналы обратно
             self.table.blockSignals(False)
     def show_error(self, message, asset_name, col):
         """Обновленное стилизованное окно ошибки для CapEx"""
@@ -279,19 +329,14 @@ class CapitalExpenditureWidget(QFrame):
 
     def fill_default_data(self):
         self.table.blockSignals(True)
-        for r in range(10):
-            data = self.default_data_list[r]
+        self.table.setRowCount(len(self.default_data_list))
+        for r, data in enumerate(self.default_data_list):
             total_val = data[4] + (data[4] * data[5] / 100)
-            data[1] = total_val
+            formatted_row = [data[0], total_val, data[2], data[3], data[4], data[5]]
 
-            for c in range(6):
-                # Для стоимости используем денежный формат, для остальных — обычный
-                if c in [1, 4]:
-                    val_text = self.format_as_money(data[c])
-                else:
-                    val_text = self.format_val(data[c])
-
-                item = QTableWidgetItem(val_text)
+            for c, val in enumerate(formatted_row):
+                text = self.format_as_money(val) if c in [1, 4] else self.format_val(val)
+                item = QTableWidgetItem(text)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
                 if c == 1:
@@ -302,7 +347,6 @@ class CapitalExpenditureWidget(QFrame):
                 self.table.setItem(r, c, item)
             self.table.setRowHeight(r, 35)
         self.table.blockSignals(False)
-
     def recalculate_row(self, row):
         was_blocked = self.table.signalsBlocked()
         if not was_blocked: self.table.blockSignals(True)
@@ -337,22 +381,7 @@ class CapitalExpenditureWidget(QFrame):
         self.apply_btn.setStyleSheet(styles.get(state, styles["default"]))
 
     def accept_data(self):
-        new_data = []
-        for r in range(self.table.rowCount()):
-            row_data = []
-            for c in range(6):
-                item = self.table.item(r, c)
-                val = item.text().replace(' ', '').replace(',', '.')
-                if c > 0:
-                    try:
-                        val = float(val)
-                    except:
-                        val = 0.0
-                else:
-                    val = item.text() if item else ""
-                row_data.append(val)
-            new_data.append(row_data)
-        self.current_data = new_data
+        self.current_data = [] # Здесь логика сбора данных в список
         self.apply_btn.setText("Данные приняты ✓")
         self.set_apply_btn_style("success")
         QTimer.singleShot(2000, self.reset_button)
@@ -399,33 +428,21 @@ class CapitalExpenditureWidget(QFrame):
             return str(val)
 
     def get_capex_full_data(self):
-        """Возвращает список активов с их стоимостью и месяцем покупки"""
-        capex_list = []
-        # Проходим по всем строкам таблицы
-        for r in range(self.table.rowCount()):
-            try:
-                name = self.table.item(r, 0).text()
-                # Индексы: 1 - Итоговая цена, 2 - Месяц покупки
-                total_price = float(self.table.item(r, 1).text().replace(' ', '').replace(',', '.'))
-                buy_month = int(float(self.table.item(r, 2).text().replace(',', '.')))
-
-                capex_list.append({
-                    'name': name,
-                    'cost': total_price,
-                    'month': buy_month
-                })
-            except Exception as e:
-                print(f"Ошибка парсинга CapEx в строке {r}: {e}")
-        return capex_list
-
-    def get_capex_full_data(self):
         capex_list = []
         for r in range(self.table.rowCount()):
             try:
-                total_price = float(self.table.item(r, 1).text().replace(' ', '').replace(',', '.'))
-                buy_month = int(float(self.table.item(r, 2).text().replace(',', '.')))
-                term = int(float(self.table.item(r, 3).text().replace(',', '.')))  # Срок службы
-                capex_list.append({'cost': total_price, 'month': buy_month, 'term': term})
+                name_item = self.table.item(r, 0)
+                cost_item = self.table.item(r, 1)
+                month_item = self.table.item(r, 2)
+                term_item = self.table.item(r, 3)
+
+                if all([name_item, cost_item, month_item, term_item]):
+                    capex_list.append({
+                        'name': name_item.text(),
+                        'cost': float(cost_item.text().replace(' ', '').replace(',', '.')),
+                        'month': int(float(month_item.text().replace(',', '.'))),
+                        'term': int(float(term_item.text().replace(',', '.')))
+                    })
             except:
                 continue
         return capex_list
