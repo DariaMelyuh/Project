@@ -5,6 +5,8 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QFrame, QMessageBox, QPushButton, QTabWidget)
 from PyQt6.QtCore import Qt
+
+from HelpDialog import HelpDialog
 from Widget.MacroParameters.InputRowWidget import InputRowWidget
 from Widget.MacroParameters.TaxesWidget import TaxesWidget
 from Widget.MacroParameters.InflationWidget import InflationWidget
@@ -91,7 +93,7 @@ class MainWindow(QWidget):
         title = QLabel("Финансовая модель инвестиционного проекта")
         title.setStyleSheet("""
                 font-family: 'Times New Roman';
-                font-size: 27px; 
+                font-size: 27px;
                 font-weight: bold;
                 background: transparent;
             """)
@@ -134,7 +136,6 @@ class MainWindow(QWidget):
         self.prediction_cf_widget = PredictionCashFlowWidget()
         self.accumulated_cf_widget = AccumulatedCashFlowWidget()
         self.efficiency_widget = EfficiencyMetricsWidget(main_window=self)
-        # Когда в комбобоксе года меняется текст, таблица тут же меняет заголовки
         self.input_widget.year_cb.currentTextChanged.connect(self.efficiency_widget.on_year_selected)
         self.capm_widget = CAPMWidget(main_window=self)
         self.wacc_widget = WACCWidget(main_window=self)
@@ -152,7 +153,6 @@ class MainWindow(QWidget):
         self.asset_sales_widget = AssetSalesWidget(self.input_widget)
         self.op_cf_widget = OperationalCashFlowWidget()
         self.yearly_results = YearlyResultsWidget()
-        # Когда в базе товаров что-то меняется, обновляем имена в темпах роста
         self.revenue_params.products_changed.connect(self.volume_growth.update_product_names)
         self.revenue_params.products_changed.connect(self.price_growth.update_product_names)
         self.income_selector = ScenarioSelectorWidget("Сценарий доходов")
@@ -243,29 +243,21 @@ class MainWindow(QWidget):
         layout = QVBoxLayout(container)
         layout.setSpacing(25)
         layout.setContentsMargins(15, 20, 20, 20)
-
         # 1. Основные параметры выручки
         layout.addWidget(self.revenue_params)
-
-        # --- НОВЫЙ БЛОК: Темпы роста в одну строку ---
+        #  Темпы роста в одну строку ---
         growth_row = QHBoxLayout()
         growth_row.setSpacing(10)  # Отступ между таблицами
 
-        # Немного уменьшаем ширину каждого виджета (было 400, ставим 385 или 390)
-        # Это предотвратит появление горизонтальной полосы прокрутки
         self.volume_growth.setFixedWidth(735)
         self.price_growth.setFixedWidth(735)
 
         growth_row.addWidget(self.volume_growth, alignment=Qt.AlignmentFlag.AlignLeft)
         growth_row.addWidget(self.price_growth, alignment=Qt.AlignmentFlag.AlignLeft)
         growth_row.addStretch()  # Чтобы они прижимались влево, если экран очень широкий
-
         layout.addLayout(growth_row)
-        # --------------------------------------------
-
         # 2. Параметры мощности
         layout.addWidget(self.sales_capacity)
-
         # 3. Ряд затрат (CAPEX и OPEX)
         costs_row = QHBoxLayout()
         costs_row.setSpacing(10)
@@ -273,10 +265,8 @@ class MainWindow(QWidget):
         costs_row.addWidget(self.opex_widget, alignment=Qt.AlignmentFlag.AlignTop)
         costs_row.addStretch()
         layout.addLayout(costs_row)
-
         # 4. Таблица продажи активов
         layout.addWidget(self.asset_sales_widget)
-
         layout.addStretch()
         self.tabs.addTab(scroll, "4. Продажи и затраты")
     def create_tab_results(self):
@@ -843,8 +833,10 @@ class MainWindow(QWidget):
             self.monthly_rate_widget.refresh_calculations()
 
     def show_app_info(self):
-        QMessageBox.information(self, "Информация", "Финансовая модель проекта.")
-
+        # Создаем экземпляр нашего нового класса
+        dialog = HelpDialog(self)
+        # .exec() открывает окно как модальное (блокирует основное, пока не закроют)
+        dialog.exec()
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
