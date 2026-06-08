@@ -71,9 +71,6 @@ class EfficiencyMetricsWidget(QWidget):
         frame_layout.setContentsMargins(2, 2, 2, 2)
         frame_layout.addWidget(self.table)
 
-        # СТИЛИ CSS
-        # СТИЛИ CSS
-        # СТИЛИ CSS
         self.setStyleSheet("""
                     #modernTableFrame {
                         background-color: white;
@@ -324,32 +321,55 @@ class EfficiencyMetricsWidget(QWidget):
         # --- НОВЫЙ БЛОК: ПОЛУЧЕНИЕ ДИНАМИЧЕСКОЙ СТАВКИ ИЗ CAPM ---
         effective_rate = discount_rate  # Значение по умолчанию (0.15)
 
-        # Проверяем, есть ли связь с главным окном и виджетом CAPM
-        if hasattr(self, 'main_window') and hasattr(self.main_window, 'capm_widget'):
-            capm = self.main_window.capm_widget
-            re_values = []
+        # # Проверяем, есть ли связь с главным окном и виджетом CAPM
+        # if hasattr(self, 'main_window') and hasattr(self.main_window, 'capm_widget'):
+        #     capm = self.main_window.capm_widget
+        #     re_values = []
+        #
+        #     # Собираем все ставки Re за 5 лет из CAPMWidget
+        #     for year_str in capm.years:
+        #         val = capm.get_re_for_year(year_str)
+        #         if val:
+        #             re_values.append(val / 100)  # из % в доли (например, 0.21)
+        #
+        #     if re_values:
+        #         # Берем максимальную ставку (самый консервативный сценарий)
+        #         effective_rate = max(re_values)
+        #
+        # else:
+        #     print("DEBUG: Связь с CAPMWidget не найдена, используем 15%")
+        #
+        # # --- 1. ARR ---
+        # avg_annual_np = (sum(net_profit_monthly) / (len(net_profit_monthly) / 12)) if len(net_profit_monthly) > 0 else 0
+        # arr = avg_annual_np / investments
+        # is_arr_ok = arr >= effective_rate
 
-            # Собираем все ставки Re за 5 лет из CAPMWidget
-            for year_str in capm.years:
-                val = capm.get_re_for_year(year_str)
-                if val:
-                    re_values.append(val / 100)  # из % в доли (например, 0.21)
+        # Проверяем, есть ли связь с главным окном и виджетом WACC
+        if hasattr(self, 'main_window') and hasattr(self.main_window, 'wacc_widget'):
+            wacc_widget = self.main_window.wacc_widget
+            wacc_values = []
 
-            if re_values:
-                # Берем максимальную ставку (самый консервативный сценарий)
-                effective_rate = max(re_values)
+            # Собираем все ставки WACC за доступные года из WACCWidget
+            for year_str in wacc_widget.years:
+                val = wacc_widget.get_wacc_for_year(year_str)
+                if val is not None:
+                    wacc_values.append(val / 100)  # из % в доли (например, 0.116)
 
+            if wacc_values:
+                # Берем максимальную ставку WACC (самый консервативный сценарий для барьерной ставки)
+                effective_rate = max(wacc_values)
+            else:
+                effective_rate = 0.116  # Дефолтный WACC (11.6%), если список пуст
         else:
-            print("DEBUG: Связь с CAPMWidget не найдена, используем 15%")
+            print("DEBUG: Связь с WACCWidget не найдена, используем дефолт 11.6%")
+            effective_rate = 0.116
 
         # --- 1. ARR ---
         avg_annual_np = (sum(net_profit_monthly) / (len(net_profit_monthly) / 12)) if len(net_profit_monthly) > 0 else 0
         arr = avg_annual_np / investments
         is_arr_ok = arr >= effective_rate
 
-
-
-        status_text = "Выше нормы" if is_arr_ok else "Ниже нормы"
+        status_text = "выше нормы" if is_arr_ok else "ниже нормы"
         comment = f"Доходность {status_text} ({effective_rate:.1%})"
         self._fill_row(0, f"{arr:.1%}", comment, is_arr_ok)
 
@@ -370,7 +390,7 @@ class EfficiencyMetricsWidget(QWidget):
             pass
         is_irr_ok = irr_annual >= effective_rate
         self._fill_row(2, f"{irr_annual:.1%}",
-                       f"Выше {effective_rate:.1%}" if is_irr_ok else f"Ниже {effective_rate:.1%}",
+                       f"Выше нормы {effective_rate:.1%}" if is_irr_ok else f"Ниже нормы {effective_rate:.1%}",
                        is_irr_ok)
 
         # --- 4 & 6. PP (Месяцы и Годы) ---

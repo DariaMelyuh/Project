@@ -92,9 +92,9 @@ class WACCWidget(QFrame):
             # Внутри метода update_years
             row_titles = [
                 ("Стоимость собств. капитала, %", "re"),
-                ("Доля собств. капитала, %", "we"),
+                ("Доля заемного капитала, %", "we"),
                 ("Стоимость заемного капитала, %", "rd"),
-                ("Доля заемного капитала, %", "wd"),
+                ("Доля собств. капитала, %", "wd"),
                 ("Общая стоимость капитала", "total_cap"),  # Новая строка
                 ("Ставка налога на прибыль, %", "tax"),
                 ("Итого, %", "wacc")
@@ -167,9 +167,9 @@ class WACCWidget(QFrame):
             # 2. Создание строк
             row_titles = [
                 ("Стоимость собств. капитала, %", "re"),
-                ("Доля собств. капитала, %", "we"),
+                ("Доля заемного капитала, %", "we"),
                 ("Стоимость заемного капитала, %", "rd"),
-                ("Доля заемного капитала, %", "wd"),
+                ("Доля собств. капитала, %", "wd"),
                 ("Общая стоимость капитала", "total_cap"),
                 ("Ставка налога на прибыль, %", "tax"),
                 ("Итого, %", "wacc")
@@ -273,3 +273,21 @@ class WACCWidget(QFrame):
             # Если это ошибка ключа (KeyError), мы её подавляем, так как интерфейс скоро обновится
             if not isinstance(e, KeyError):
                 print(f"WACC Calculation Error: {e}")
+
+    def get_wacc_for_year(self, year_str):
+        """Метод для получения значения WACC конкретного года извне"""
+        try:
+            # Ищем ячейку итогового WACC для переданного года
+            key = f"wacc_{year_str}"
+            if key in self.cells:
+                return float(self.cells[key].text().replace(' ', '').replace(',', '.'))
+
+            # Если по какой-то причине года нет в cells, берем первый доступный
+            for k, cell in self.cells.items():
+                if k.startswith("wacc_"):
+                    return float(cell.text().replace(' ', '').replace(',', '.'))
+
+            return 11.6  # Базовое дефолтное значение, если словарь пуст
+        except Exception as e:
+            print(f"Error getting WACC for year {year_str}: {e}")
+            return 11.6  # Запасной вариант при ошибке
